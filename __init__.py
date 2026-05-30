@@ -290,6 +290,7 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
     for gate in sorted_gates(scene, rig):
         if not object_is_valid(gate):
             continue
+        rebuild_gate_cutter_mesh(gate)
         target_local = inv @ gate.matrix_world.translation.copy()
         hit = nearest_segment_info(local_points, target_local, closed)
         if hit is None:
@@ -300,7 +301,7 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
         cut_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height + s.parapet_height + s.crenel_height + 0.05))
         angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
         local_matrix = (
-            Matrix.Translation(Vector((snapped.x, snapped.y, cut_height * 0.5)))
+            Matrix.Translation(Vector((snapped.x, snapped.y, 0.0)))
             @ Matrix.Rotation(angle, 4, 'Z')
             @ Matrix.Diagonal((
                 max(0.05, get_gate_length(gate, s.gate_length)),
@@ -425,6 +426,53 @@ def _miter_offset_point(prev_p, p, next_p, half, sign):
 def _append_unique(points, point, eps=1e-5):
     if not points or (points[-1] - point).length > eps:
         points.append(point)
+
+
+def rebuild_gate_cutter_mesh(obj, arc_steps=12):
+    if not object_is_valid(obj) or obj.type != 'MESH' or obj.data is None:
+        return
+
+    mesh = obj.data
+    bm = bmesh.new()
+    shoulder_z = 0.5
+    radius = 0.5
+    front_y = -0.5
+    back_y = 0.5
+
+    profile = [
+        Vector((-0.5, 0.0)),
+        Vector((0.5, 0.0)),
+        Vector((0.5, shoulder_z)),
+    ]
+    step_count = max(2, arc_steps)
+    for step in range(1, step_count):
+        angle = (step / step_count) * pi
+        profile.append(Vector((cos(angle) * radius, shoulder_z + sin(angle) * radius)))
+    profile.append(Vector((-0.5, shoulder_z)))
+
+    front = [bm.verts.new((point.x, front_y, point.y)) for point in profile]
+    back = [bm.verts.new((point.x, back_y, point.y)) for point in profile]
+
+    try:
+        bm.faces.new(front)
+    except ValueError:
+        pass
+    try:
+        bm.faces.new(list(reversed(back)))
+    except ValueError:
+        pass
+
+    for i in range(len(profile)):
+        j = (i + 1) % len(profile)
+        try:
+            bm.faces.new((front[i], front[j], back[j], back[i]))
+        except ValueError:
+            pass
+
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
 
 
 def _rounded_corner_samples(prev_p, p, next_p, radius, steps):
@@ -1451,11 +1499,6 @@ class WPWALL_OT_add_gate(Operator):
             location = (waypoints[0].matrix_world.translation + waypoints[1].matrix_world.translation) * 0.5
 
         mesh = bpy.data.meshes.new(f"GATE_{wall_id:03d}_mesh")
-        bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
-        bm.to_mesh(mesh)
-        bm.free()
-
         obj = bpy.data.objects.new(f"GATE_{wall_id:03d}_{len(sorted_gates(scene, rig)):03d}", mesh)
         obj[ADDON_TAG] = True
         obj[GATE_TAG] = True
@@ -1467,6 +1510,7 @@ class WPWALL_OT_add_gate(Operator):
         obj.location = location
         set_gate_length(obj, scene.wp_wall_settings.gate_length)
         set_gate_height(obj, scene.wp_wall_settings.gate_height)
+        rebuild_gate_cutter_mesh(obj)
         coll.objects.link(obj)
         parent_keep_transform(obj, wall)
 
