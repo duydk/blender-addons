@@ -755,7 +755,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         gate_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height))
         cut_depth = max(0.05, s.wall_thickness + 0.05)
         door_face_inset = 0.03
-        leaf_width = gate_length * 0.5
+        leaf_width = gate_length * (0.5 if use_source else 0.28)
         half_gate = gate_length * 0.5
         half_leaf = leaf_width * 0.5
         swing_angle = s.gate_open_angle if s.gate_open else 0.0
