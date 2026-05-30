@@ -482,7 +482,9 @@ def ensure_default_gate_leaf_mesh(side):
     if mesh is None:
         mesh = bpy.data.meshes.new(mesh_name)
     bm = bmesh.new()
-    bmesh.ops.create_cube(bm, size=1.0)
+    # Use a 1x1x1 source cube so later scale math maps directly to the
+    # intended door width/height/thickness.
+    bmesh.ops.create_cube(bm, size=0.5)
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
