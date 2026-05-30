@@ -729,6 +729,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         gate_length = max(0.05, get_gate_length(gate, s.gate_length))
         gate_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height))
         cut_depth = max(0.05, s.wall_thickness + 0.05)
+        door_face_inset = 0.03
         leaf_width = gate_length * 0.5
         half_gate = gate_length * 0.5
         half_leaf = leaf_width * 0.5
@@ -767,7 +768,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             instance.hide_set(False)
             ensure_collection(context).objects.link(instance)
             if use_source:
-                local_door_offset = Matrix.Identity(4)
+                local_door_offset = Matrix.Translation(Vector((0.0, -(cut_depth * 0.5) + door_face_inset, 0.0)))
                 local_door_scale = Matrix.Diagonal((
                     src_scale.x * (leaf_width / base_len) * s.gate_scale,
                     src_scale.y * s.gate_scale,
@@ -777,7 +778,11 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             else:
                 fallback_height = max(0.05, gate_height)
                 fallback_thickness = max(0.04, min(cut_depth * 0.12, 0.14))
-                local_door_offset = Matrix.Translation(Vector((0.0, 0.0, fallback_height * 0.5)))
+                local_door_offset = Matrix.Translation(Vector((
+                    0.0,
+                    -(cut_depth * 0.5) + (fallback_thickness * 0.5) + door_face_inset,
+                    fallback_height * 0.5,
+                )))
                 local_door_scale = Matrix.Diagonal((
                     leaf_width * 0.98,
                     fallback_thickness,
