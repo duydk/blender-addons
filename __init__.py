@@ -476,53 +476,13 @@ def rebuild_gate_cutter_mesh(obj, arc_steps=12):
     mesh.update()
 
 
-def ensure_default_gate_leaf_mesh(side, arc_steps=12):
+def ensure_default_gate_leaf_mesh(side):
     mesh_name = f"WP_Default_Gate_Leaf_{side}"
     mesh = bpy.data.meshes.get(mesh_name)
     if mesh is None:
         mesh = bpy.data.meshes.new(mesh_name)
     bm = bmesh.new()
-
-    front_y = -0.5
-    back_y = 0.5
-    shoulder_z = 0.5
-    radius = 0.5
-    step_count = max(4, arc_steps)
-
-    if side == "L":
-        x_values = [-0.5 + (step / step_count) for step in range(step_count + 1)]
-        bottom = [Vector((-0.5, 0.0)), Vector((0.5, 0.0))]
-    else:
-        x_values = [0.5 - (step / step_count) for step in range(step_count + 1)]
-        bottom = [Vector((0.5, 0.0)), Vector((-0.5, 0.0))]
-
-    top = []
-    for x in x_values:
-        arch_x = x - 0.5 if side == "L" else x + 0.5
-        arch_x = _clamp(arch_x, -radius, radius)
-        z = shoulder_z + max(0.0, radius * radius - arch_x * arch_x) ** 0.5
-        top.append(Vector((x, z)))
-
-    profile = bottom + top
-    front = [bm.verts.new((point.x, front_y, point.y)) for point in profile]
-    back = [bm.verts.new((point.x, back_y, point.y)) for point in profile]
-
-    try:
-        bm.faces.new(front)
-    except ValueError:
-        pass
-    try:
-        bm.faces.new(list(reversed(back)))
-    except ValueError:
-        pass
-
-    for i in range(len(profile)):
-        j = (i + 1) % len(profile)
-        try:
-            bm.faces.new((front[i], front[j], back[j], back[i]))
-        except ValueError:
-            pass
-
+    bmesh.ops.create_cube(bm, size=1.0)
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
@@ -817,7 +777,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             else:
                 fallback_height = max(0.05, gate_height)
                 fallback_thickness = max(0.04, min(cut_depth * 0.12, 0.14))
-                local_door_offset = Matrix.Identity(4)
+                local_door_offset = Matrix.Translation(Vector((0.0, 0.0, fallback_height * 0.5)))
                 local_door_scale = Matrix.Diagonal((
                     leaf_width * 0.98,
                     fallback_thickness,
