@@ -482,9 +482,32 @@ def ensure_default_gate_leaf_mesh(side):
     if mesh is None:
         mesh = bpy.data.meshes.new(mesh_name)
     bm = bmesh.new()
-    # Use a 1x1x1 source cube so later scale math maps directly to the
-    # intended door width/height/thickness.
-    bmesh.ops.create_cube(bm, size=0.5)
+    x0, x1 = (0.0, 1.0) if side == "L" else (-1.0, 0.0)
+    y0, y1 = -0.5, 0.5
+    z0, z1 = 0.0, 1.0
+    verts = [
+        bm.verts.new((x0, y0, z0)),
+        bm.verts.new((x1, y0, z0)),
+        bm.verts.new((x1, y1, z0)),
+        bm.verts.new((x0, y1, z0)),
+        bm.verts.new((x0, y0, z1)),
+        bm.verts.new((x1, y0, z1)),
+        bm.verts.new((x1, y1, z1)),
+        bm.verts.new((x0, y1, z1)),
+    ]
+    faces = (
+        (0, 1, 2, 3),
+        (4, 7, 6, 5),
+        (0, 4, 5, 1),
+        (1, 5, 6, 2),
+        (2, 6, 7, 3),
+        (3, 7, 4, 0),
+    )
+    for face in faces:
+        try:
+            bm.faces.new([verts[i] for i in face])
+        except ValueError:
+            pass
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
@@ -771,6 +794,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             ensure_collection(context).objects.link(instance)
             if use_source:
                 local_door_offset = Matrix.Translation(Vector((0.0, -(cut_depth * 0.5) + door_face_inset, 0.0)))
+                local_leaf_center = Matrix.Translation(Vector((center_x, 0.0, 0.0)))
                 local_door_scale = Matrix.Diagonal((
                     src_scale.x * (leaf_width / base_len) * s.gate_scale,
                     src_scale.y * s.gate_scale,
@@ -783,8 +807,9 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 local_door_offset = Matrix.Translation(Vector((
                     0.0,
                     -(cut_depth * 0.5) + (fallback_thickness * 0.5) + door_face_inset,
-                    fallback_height * 0.5,
+                    0.0,
                 )))
+                local_leaf_center = Matrix.Identity(4)
                 local_door_scale = Matrix.Diagonal((
                     leaf_width * 0.98,
                     fallback_thickness,
@@ -795,7 +820,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 gate_frame
                 @ Matrix.Translation(Vector((hinge_x, 0.0, 0.0)))
                 @ Matrix.Rotation(open_angle, 4, 'Z')
-                @ Matrix.Translation(Vector((center_x, 0.0, 0.0)))
+                @ local_leaf_center
                 @ local_door_offset
                 @ src_rot_m
                 @ local_door_scale
