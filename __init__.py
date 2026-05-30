@@ -299,7 +299,7 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
         _seg_idx, snapped, tangent = hit
         if tangent is None:
             tangent = Vector((1.0, 0.0, 0.0))
-        cut_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height + s.parapet_height + s.crenel_height + 0.05))
+        cut_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height))
         angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
         local_matrix = (
             Matrix.Translation(Vector((snapped.x, snapped.y, -floor_overcut)))
@@ -474,6 +474,18 @@ def rebuild_gate_cutter_mesh(obj, arc_steps=12):
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
+
+
+def ensure_default_gate_leaf_mesh():
+    mesh = bpy.data.meshes.get("WP_Default_Gate_Leaf")
+    if mesh is None:
+        mesh = bpy.data.meshes.new("WP_Default_Gate_Leaf")
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    return mesh
 
 
 def _rounded_corner_samples(prev_p, p, next_p, radius, steps):
@@ -698,13 +710,17 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
     clear_gate_instances(rig)
     s = settings(scene)
     source = s.gate_source
-    if not object_is_valid(source):
-        return
-
     wall_id = wall_id_from_obj(rig)
-    _src_loc, src_rot, src_scale = source.matrix_world.decompose()
-    src_rot_m = src_rot.to_matrix().to_4x4()
-    base_len = max(abs(source.dimensions.x), 1e-4)
+    use_source = object_is_valid(source)
+    if use_source:
+        _src_loc, src_rot, src_scale = source.matrix_world.decompose()
+        src_rot_m = src_rot.to_matrix().to_4x4()
+        base_len = max(abs(source.dimensions.x), 1e-4)
+    else:
+        src_rot_m = Matrix.Identity(4)
+        src_scale = Vector((1.0, 1.0, 1.0))
+        base_len = 1.0
+        default_mesh = ensure_default_gate_leaf_mesh()
 
     for idx, gate in enumerate(sorted_gates(scene, rig)):
         if not object_is_valid(gate):
@@ -725,20 +741,27 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             ("R", +half_gate, -half_leaf, -swing_angle),
         )
         for side, hinge_x, center_x, open_angle in leaf_specs:
-            instance = source.copy()
-            if source.data:
-                instance.data = source.data
-            instance.animation_data_clear()
+            if use_source:
+                instance = source.copy()
+                if source.data:
+                    instance.data = source.data
+                instance.animation_data_clear()
+                instance.display_type = source.display_type
+                instance.hide_render = source.hide_render
+                instance.show_bounds = source.show_bounds
+                instance.display_bounds_type = source.display_bounds_type
+            else:
+                instance = bpy.data.objects.new("WP_Default_Gate_Leaf", default_mesh)
+                instance.display_type = 'TEXTURED'
+                instance.hide_render = False
+                instance.show_bounds = False
+                instance.display_bounds_type = 'BOX'
             instance.name = f"GATE_{wall_id:03d}_{idx:03d}_{side}"
             instance[ADDON_TAG] = True
             instance[GATE_INSTANCE_TAG] = True
             instance[WALL_ID_TAG] = wall_id
-            instance.display_type = source.display_type
-            instance.hide_render = source.hide_render
             instance.hide_viewport = False
             instance.hide_set(False)
-            instance.show_bounds = source.show_bounds
-            instance.display_bounds_type = source.display_bounds_type
             ensure_collection(context).objects.link(instance)
             placement = (
                 gate_frame
