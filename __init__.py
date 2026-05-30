@@ -476,44 +476,6 @@ def rebuild_gate_cutter_mesh(obj, arc_steps=12):
     mesh.update()
 
 
-def ensure_default_gate_leaf_mesh(side):
-    mesh_name = f"WP_Default_Gate_Leaf_{side}"
-    mesh = bpy.data.meshes.get(mesh_name)
-    if mesh is None:
-        mesh = bpy.data.meshes.new(mesh_name)
-    bm = bmesh.new()
-    x0, x1 = (0.0, 1.0) if side == "L" else (-1.0, 0.0)
-    y0, y1 = -0.5, 0.5
-    z0, z1 = 0.0, 1.0
-    verts = [
-        bm.verts.new((x0, y0, z0)),
-        bm.verts.new((x1, y0, z0)),
-        bm.verts.new((x1, y1, z0)),
-        bm.verts.new((x0, y1, z0)),
-        bm.verts.new((x0, y0, z1)),
-        bm.verts.new((x1, y0, z1)),
-        bm.verts.new((x1, y1, z1)),
-        bm.verts.new((x0, y1, z1)),
-    ]
-    faces = (
-        (0, 1, 2, 3),
-        (4, 7, 6, 5),
-        (0, 4, 5, 1),
-        (1, 5, 6, 2),
-        (2, 6, 7, 3),
-        (3, 7, 4, 0),
-    )
-    for face in faces:
-        try:
-            bm.faces.new([verts[i] for i in face])
-        except ValueError:
-            pass
-    bm.to_mesh(mesh)
-    bm.free()
-    mesh.update()
-    return mesh
-
-
 def _rounded_corner_samples(prev_p, p, next_p, radius, steps):
     if radius <= 1e-6:
         return [p.copy()]
@@ -734,99 +696,7 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
 
 def rebuild_gate_instances(scene, context, rig, wall_obj):
     clear_gate_instances(rig)
-    s = settings(scene)
-    source = s.gate_source
-    wall_id = wall_id_from_obj(rig)
-    use_source = object_is_valid(source)
-    if use_source:
-        _src_loc, src_rot, src_scale = source.matrix_world.decompose()
-        src_rot_m = src_rot.to_matrix().to_4x4()
-        base_len = max(abs(source.dimensions.x), 1e-4)
-    else:
-        src_rot_m = Matrix.Identity(4)
-        src_scale = Vector((1.0, 1.0, 1.0))
-        base_len = 1.0
-
-    for idx, gate in enumerate(sorted_gates(scene, rig)):
-        if not object_is_valid(gate):
-            continue
-        gate_loc, gate_rot, _gate_scale = gate.matrix_world.decompose()
-        gate_length = max(0.05, get_gate_length(gate, s.gate_length))
-        gate_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height))
-        cut_depth = max(0.05, s.wall_thickness + 0.05)
-        door_face_inset = 0.03
-        leaf_width = gate_length * (0.5 if use_source else 0.28)
-        half_gate = gate_length * 0.5
-        half_leaf = leaf_width * 0.5
-        swing_angle = s.gate_open_angle if s.gate_open else 0.0
-        gate_frame = (
-            Matrix.Translation(gate_loc + Vector((0.0, 0.0, s.gate_z_offset)))
-            @ gate_rot.to_matrix().to_4x4()
-            @ Matrix.Rotation(s.gate_rotation, 4, 'Z')
-        )
-        leaf_specs = (
-            ("L", -half_gate, +half_leaf, +swing_angle),
-            ("R", +half_gate, -half_leaf, -swing_angle),
-        )
-        for side, hinge_x, center_x, open_angle in leaf_specs:
-            if use_source:
-                instance = source.copy()
-                if source.data:
-                    instance.data = source.data
-                instance.animation_data_clear()
-                instance.display_type = source.display_type
-                instance.hide_render = source.hide_render
-                instance.show_bounds = source.show_bounds
-                instance.display_bounds_type = source.display_bounds_type
-            else:
-                default_mesh = ensure_default_gate_leaf_mesh(side)
-                instance = bpy.data.objects.new(f"WP_Default_Gate_Leaf_{side}", default_mesh)
-                instance.display_type = 'TEXTURED'
-                instance.hide_render = False
-                instance.show_bounds = False
-                instance.display_bounds_type = 'BOX'
-            instance.name = f"GATE_{wall_id:03d}_{idx:03d}_{side}"
-            instance[ADDON_TAG] = True
-            instance[GATE_INSTANCE_TAG] = True
-            instance[WALL_ID_TAG] = wall_id
-            instance.hide_viewport = False
-            instance.hide_set(False)
-            ensure_collection(context).objects.link(instance)
-            if use_source:
-                local_door_offset = Matrix.Translation(Vector((0.0, -(cut_depth * 0.5) + door_face_inset, 0.0)))
-                local_leaf_center = Matrix.Translation(Vector((center_x, 0.0, 0.0)))
-                local_door_scale = Matrix.Diagonal((
-                    src_scale.x * (leaf_width / base_len) * s.gate_scale,
-                    src_scale.y * s.gate_scale,
-                    src_scale.z * s.gate_scale,
-                    1.0,
-                ))
-            else:
-                fallback_height = max(0.05, gate_height)
-                fallback_thickness = max(0.04, min(cut_depth * 0.12, 0.14))
-                local_door_offset = Matrix.Translation(Vector((
-                    0.0,
-                    -(cut_depth * 0.5) + (fallback_thickness * 0.5) + door_face_inset,
-                    0.0,
-                )))
-                local_leaf_center = Matrix.Identity(4)
-                local_door_scale = Matrix.Diagonal((
-                    leaf_width * 0.98,
-                    fallback_thickness,
-                    fallback_height,
-                    1.0,
-                ))
-            placement = (
-                gate_frame
-                @ Matrix.Translation(Vector((hinge_x, 0.0, 0.0)))
-                @ Matrix.Rotation(open_angle, 4, 'Z')
-                @ local_leaf_center
-                @ local_door_offset
-                @ src_rot_m
-                @ local_door_scale
-            )
-            instance.matrix_world = placement
-            parent_keep_transform(instance, wall_obj)
+    return
 
 
 def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_points):
@@ -1247,12 +1117,6 @@ class WPWallSettings(PropertyGroup):
     tower_scale: FloatProperty(name="Tower Scale", default=1.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_z_offset: FloatProperty(name="Tower Z Offset", default=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_rotation: FloatProperty(name="Tower Rotation", default=0.0, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_source: PointerProperty(name="Gate Source", type=bpy.types.Object, update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_scale: FloatProperty(name="Gate Scale", default=1.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_z_offset: FloatProperty(name="Gate Z Offset", default=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_rotation: FloatProperty(name="Gate Rotation", default=0.0, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_open: BoolProperty(name="Gate Open", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_open_angle: FloatProperty(name="Gate Open Angle", default=1.22173, min=0.0, max=3.14159, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
     gate_length: FloatProperty(name="Gate Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_length(self, ctx))
     gate_height: FloatProperty(name="Gate Height", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_height(self, ctx))
     opening_length: FloatProperty(name="Opening Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_opening_length(self, ctx))
@@ -1742,12 +1606,6 @@ def draw_main_panel(layout, context):
         col.prop(s, "tower_scale")
         col.prop(s, "tower_z_offset")
         col.prop(s, "tower_rotation")
-        col.prop(s, "gate_source")
-        col.prop(s, "gate_scale")
-        col.prop(s, "gate_z_offset")
-        col.prop(s, "gate_rotation")
-        col.prop(s, "gate_open")
-        col.prop(s, "gate_open_angle")
         col.prop(s, "gate_length")
         col.prop(s, "gate_height")
         col.prop(s, "opening_length")
@@ -1779,8 +1637,6 @@ def draw_main_panel(layout, context):
                 layout.separator()
                 box = layout.box()
                 box.label(text=f"Selected Gate: {active.name}")
-                box.prop(s, "gate_open")
-                box.prop(s, "gate_open_angle")
                 box.prop(s, "gate_length")
                 box.prop(s, "gate_height")
                 box.label(text="Drag it to update its position on the wall")
