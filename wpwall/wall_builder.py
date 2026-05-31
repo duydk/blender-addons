@@ -823,9 +823,35 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
     if not gates:
         return
 
+    def create_gate_facet_instance(gate_obj, idx):
+        if not object_is_valid(gate_obj) or gate_obj.type != 'MESH' or gate_obj.data is None:
+            return
+        facet_mesh = bpy.data.meshes.new(f"GATE_FACET_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+        bm.from_mesh(gate_obj.data)
+        # Remove end caps so only interior tunnel facets remain.
+        cap_faces = [f for f in bm.faces if abs(f.normal.y) > 0.95]
+        if cap_faces:
+            bmesh.ops.delete(bm, geom=cap_faces, context='FACES')
+        bm.normal_update()
+        bm.to_mesh(facet_mesh)
+        bm.free()
+        facet_mesh.update()
+
+        facet_obj = bpy.data.objects.new(f"GATE_FACET_{wall_id:03d}_{idx:03d}", facet_mesh)
+        facet_obj[ADDON_TAG] = True
+        facet_obj[GATE_INSTANCE_TAG] = True
+        facet_obj[WALL_ID_TAG] = wall_id
+        facet_obj.hide_render = False
+        facet_obj.hide_set(False)
+        ensure_collection(context).objects.link(facet_obj)
+        facet_obj.matrix_world = gate_obj.matrix_world.copy()
+        parent_keep_transform(facet_obj, wall_obj)
+
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
             continue
+        create_gate_facet_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 
@@ -1347,5 +1373,4 @@ def build_wall_mesh(scene, context=None):
             tower_points.append(inv @ obj.matrix_world.translation.copy())
     rebuild_tower_instances(scene, ctx, rig, wall_obj, raw_waypoints, tower_points if len(tower_points) >= 1 else [])
     rebuild_gate_instances(scene, ctx, rig, wall_obj)
-
 
