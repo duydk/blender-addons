@@ -12,7 +12,7 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
     s = settings(scene)
     source = s.wall_source
     created_count = 0
-    if not object_is_valid(source) or len(local_points) < 2:
+    if not object_is_valid(source) or source.type != 'MESH' or len(local_points) < 2:
         return created_count
 
     wall_id = wall_id_from_obj(rig)
