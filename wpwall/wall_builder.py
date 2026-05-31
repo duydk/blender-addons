@@ -908,10 +908,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         y_back = 0.51
         outer_left = -0.5
         outer_right = 0.5
-        outer_shoulder = 0.48
+        outer_shoulder = 0.44
         outer_radius = 0.5
         inner_half = 0.36
-        inner_shoulder = 0.44
+        inner_shoulder = outer_shoulder
         inner_radius = 0.36
         inner_inset = 0.03
 
