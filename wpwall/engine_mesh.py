@@ -13,14 +13,6 @@ for _name in dir(_engine_instances):
         continue
     globals()[_name] = getattr(_engine_instances, _name)
 
-# Explicitly bind private helpers used by build_wall_mesh.
-# Relying only on wildcard-style propagation is brittle for underscore names.
-_safe_dir_2d = _engine_common._safe_dir_2d
-_miter_offset_point = _engine_common._miter_offset_point
-_clamp = _engine_common._clamp
-_segment_line_intersection_point_2d = _engine_common._segment_line_intersection_point_2d
-_turn_sign_2d = _engine_common._turn_sign_2d
-
 def build_wall_mesh(scene, context=None):
     s = settings(scene)
     ctx = context if context is not None else bpy.context
@@ -357,3 +349,4 @@ def build_wall_mesh(scene, context=None):
             tower_points.append(inv @ obj.matrix_world.translation.copy())
     rebuild_tower_instances(scene, ctx, rig, wall_obj, raw_waypoints, tower_points if len(tower_points) >= 1 else [])
     rebuild_gate_instances(scene, ctx, rig, wall_obj)
+
