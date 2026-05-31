@@ -1,4 +1,11 @@
-from .engine_common import *
+from . import engine_common as _engine_common
+
+# Preserve access to internal helper symbols (including underscore-prefixed ones)
+# after splitting modules.
+for _name in dir(_engine_common):
+    if _name.startswith("__"):
+        continue
+    globals()[_name] = getattr(_engine_common, _name)
 
 def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
     clear_wall_instances(rig)
@@ -261,5 +268,4 @@ def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_
         )
         instance.matrix_world = placement
         parent_keep_transform(instance, wall_obj)
-
 
