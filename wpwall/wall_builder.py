@@ -823,123 +823,42 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
     if not gates:
         return
 
-    def gate_interior_material():
+    def gate_tunnel_material():
         mat = bpy.data.materials.get("WP_Gate_Interior")
         if mat is None:
             mat = bpy.data.materials.new("WP_Gate_Interior")
             mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
         return mat
 
-    def create_gate_facet_instance(gate_obj, idx):
+    def create_gate_tunnel_instance(gate_obj, idx):
         if not object_is_valid(gate_obj) or gate_obj.type != 'MESH' or gate_obj.data is None:
             return
-        facet_mesh = bpy.data.meshes.new(f"GATE_FACET_{wall_id:03d}_{idx:03d}_mesh")
+
+        tunnel_mesh = bpy.data.meshes.new(f"GATE_TUNNEL_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
         bm.from_mesh(gate_obj.data)
-        # Remove end caps so only interior tunnel facets remain.
-        cap_faces = [f for f in bm.faces if abs(f.normal.y) > 0.95]
-        if cap_faces:
-            bmesh.ops.delete(bm, geom=cap_faces, context='FACES')
         bm.normal_update()
-        bm.to_mesh(facet_mesh)
+        bm.to_mesh(tunnel_mesh)
         bm.free()
-        facet_mesh.update()
+        tunnel_mesh.update()
 
-        facet_obj = bpy.data.objects.new(f"GATE_FACET_{wall_id:03d}_{idx:03d}", facet_mesh)
-        facet_obj[ADDON_TAG] = True
-        facet_obj[GATE_INSTANCE_TAG] = True
-        facet_obj[WALL_ID_TAG] = wall_id
-        facet_obj.hide_render = False
-        facet_obj.hide_set(False)
-        facet_obj.display_type = 'TEXTURED'
-        ensure_collection(context).objects.link(facet_obj)
-        facet_obj.matrix_world = gate_obj.matrix_world.copy()
-        parent_keep_transform(facet_obj, wall_obj)
+        tunnel_obj = bpy.data.objects.new(f"GATE_TUNNEL_{wall_id:03d}_{idx:03d}", tunnel_mesh)
+        tunnel_obj[ADDON_TAG] = True
+        tunnel_obj[GATE_INSTANCE_TAG] = True
+        tunnel_obj[WALL_ID_TAG] = wall_id
+        tunnel_obj.hide_render = False
+        tunnel_obj.hide_set(False)
+        tunnel_obj.display_type = 'TEXTURED'
+        tunnel_obj.data.materials.append(gate_tunnel_material())
+        ensure_collection(context).objects.link(tunnel_obj)
 
-        # Give liner facets actual thickness so they don't render as paper-thin
-        # and to prevent viewport see-through artifacts.
-        solid = facet_obj.modifiers.new(name="WP_GateFacetSolid", type='SOLIDIFY')
-        solid.thickness = max(0.01, s.wall_thickness * 0.12)
-        solid.offset = 0.0
-        solid.use_even_offset = True
-
-    def create_gate_arch_runner_instance(gate_obj, idx, steps=16):
-        if not object_is_valid(gate_obj):
-            return
-        mesh = bpy.data.meshes.new(f"GATE_ARCH_{wall_id:03d}_{idx:03d}_mesh")
-        bm = bmesh.new()
-
-        step_count = max(8, int(steps))
-        y_front = -0.53
-        y_back = 0.53
-        radius = 0.5
-        shoulder_z = 0.5
-        top_z = 1.08
-        inset = 0.08
-
-        underside_front = []
-        underside_back = []
-        top_front = []
-        top_back = []
-
-        for i in range(step_count + 1):
-            t = i / step_count
-            x = -0.5 + t
-            z = max(0.0, shoulder_z + max(0.0, radius * radius - x * x) ** 0.5 - inset)
-            underside_front.append(bm.verts.new((x, y_front, z)))
-            underside_back.append(bm.verts.new((x, y_back, z)))
-            top_front.append(bm.verts.new((x, y_front, top_z)))
-            top_back.append(bm.verts.new((x, y_back, top_z)))
-
-        for i in range(step_count):
-            faces = (
-                # Curved visible underside, spanning back to front.
-                (underside_back[i], underside_back[i + 1], underside_front[i + 1], underside_front[i]),
-                # Flat top hidden inside the wall/base mass.
-                (top_front[i], top_front[i + 1], top_back[i + 1], top_back[i]),
-                # Front and back vertical thickness faces.
-                (underside_front[i], underside_front[i + 1], top_front[i + 1], top_front[i]),
-                (top_back[i], top_back[i + 1], underside_back[i + 1], underside_back[i]),
-            )
-            for face in faces:
-                try:
-                    bm.faces.new(face)
-                except ValueError:
-                    pass
-
-        # Close the left and right ends of the vaulted slab.
-        for face in (
-            (underside_front[0], top_front[0], top_back[0], underside_back[0]),
-            (underside_back[-1], top_back[-1], top_front[-1], underside_front[-1]),
-        ):
-            try:
-                bm.faces.new(face)
-            except ValueError:
-                pass
-
-        bm.normal_update()
-        bm.to_mesh(mesh)
-        bm.free()
-        mesh.update()
-
-        arch_obj = bpy.data.objects.new(f"GATE_ARCH_{wall_id:03d}_{idx:03d}", mesh)
-        arch_obj[ADDON_TAG] = True
-        arch_obj[GATE_INSTANCE_TAG] = True
-        arch_obj[WALL_ID_TAG] = wall_id
-        arch_obj.hide_render = False
-        arch_obj.hide_set(False)
-        arch_obj.display_type = 'TEXTURED'
-        arch_obj.data.materials.append(gate_interior_material())
-        ensure_collection(context).objects.link(arch_obj)
-
-        arch_obj.matrix_world = gate_obj.matrix_world.copy()
-        parent_keep_transform(arch_obj, wall_obj)
+        tunnel_obj.matrix_world = gate_obj.matrix_world.copy()
+        parent_keep_transform(tunnel_obj, wall_obj)
 
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
             continue
-        create_gate_facet_instance(gate, idx)
-        create_gate_arch_runner_instance(gate, idx)
+        create_gate_tunnel_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 
