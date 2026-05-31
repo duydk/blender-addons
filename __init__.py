@@ -857,6 +857,35 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         bw = bottom_width * 0.5
         bt = bottom_thickness * 0.5
         h = base_height
+        parapet_h = max(0.0, s.parapet_height)
+        parapet_w = max(0.0, s.parapet_width)
+        crenel_h = max(0.0, s.crenel_height)
+        crenel_w = max(0.0, s.crenel_width)
+        crenel_g = max(0.0, s.crenel_gap)
+
+        def add_prism(x0, x1, y0, y1, z0, z1):
+            verts = [
+                bm.verts.new((x0, y0, z0)),
+                bm.verts.new((x1, y0, z0)),
+                bm.verts.new((x1, y1, z0)),
+                bm.verts.new((x0, y1, z0)),
+                bm.verts.new((x0, y0, z1)),
+                bm.verts.new((x1, y0, z1)),
+                bm.verts.new((x1, y1, z1)),
+                bm.verts.new((x0, y1, z1)),
+            ]
+            for face in (
+                (verts[0], verts[1], verts[2], verts[3]),
+                (verts[4], verts[7], verts[6], verts[5]),
+                (verts[0], verts[4], verts[5], verts[1]),
+                (verts[1], verts[5], verts[6], verts[2]),
+                (verts[2], verts[6], verts[7], verts[3]),
+                (verts[3], verts[7], verts[4], verts[0]),
+            ):
+                try:
+                    bm.faces.new(face)
+                except ValueError:
+                    pass
 
         v0 = bm.verts.new((-bw, -bt, 0.0))
         v1 = bm.verts.new((bw, -bt, 0.0))
@@ -878,6 +907,25 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 bm.faces.new(face)
             except ValueError:
                 pass
+
+        # Add parapets and crenels on top of fortified base using existing wall settings.
+        if parapet_h > 1e-6 and parapet_w > 1e-6 and tt > parapet_w:
+            # Front and back parapet rails.
+            add_prism(-tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
+            add_prism(-tw, tw, tt - parapet_w, tt, h, h + parapet_h)
+
+            # Crenels: small raised blocks with configurable width/gap along each rail.
+            if crenel_h > 1e-6 and crenel_w > 1e-6:
+                step = crenel_w + crenel_g
+                if step > 1e-6:
+                    rail_len = tw * 2.0
+                    offset = 0.0
+                    while offset + crenel_w <= rail_len + 1e-6:
+                        x0 = -tw + offset
+                        x1 = min(tw, x0 + crenel_w)
+                        add_prism(x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h)
+                        add_prism(x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h)
+                        offset += step
         bm.to_mesh(mesh)
         bm.free()
 
