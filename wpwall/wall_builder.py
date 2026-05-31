@@ -830,19 +830,19 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
         return mat
 
-    def create_gate_tunnel_instance(gate_obj, idx):
-        if not object_is_valid(gate_obj) or gate_obj.type != 'MESH' or gate_obj.data is None:
+    def create_gate_tunnel_box_instance(gate_obj, idx):
+        if not object_is_valid(gate_obj):
             return
 
-        tunnel_mesh = bpy.data.meshes.new(f"GATE_TUNNEL_{wall_id:03d}_{idx:03d}_mesh")
+        tunnel_mesh = bpy.data.meshes.new(f"GATE_TUNNEL_BOX_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
-        bm.from_mesh(gate_obj.data)
+        bmesh.ops.create_cube(bm, size=1.0)
         bm.normal_update()
         bm.to_mesh(tunnel_mesh)
         bm.free()
         tunnel_mesh.update()
 
-        tunnel_obj = bpy.data.objects.new(f"GATE_TUNNEL_{wall_id:03d}_{idx:03d}", tunnel_mesh)
+        tunnel_obj = bpy.data.objects.new(f"GATE_TUNNEL_BOX_{wall_id:03d}_{idx:03d}", tunnel_mesh)
         tunnel_obj[ADDON_TAG] = True
         tunnel_obj[GATE_INSTANCE_TAG] = True
         tunnel_obj[WALL_ID_TAG] = wall_id
@@ -852,13 +852,18 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         tunnel_obj.data.materials.append(gate_tunnel_material())
         ensure_collection(context).objects.link(tunnel_obj)
 
-        tunnel_obj.matrix_world = gate_obj.matrix_world.copy()
+        # Debuggable masonry block inside the cutter's local tunnel volume.
+        local_box = (
+            Matrix.Translation(Vector((0.0, 0.0, 0.72)))
+            @ Matrix.Diagonal((0.65, 0.92, 0.22, 1.0))
+        )
+        tunnel_obj.matrix_world = gate_obj.matrix_world @ local_box
         parent_keep_transform(tunnel_obj, wall_obj)
 
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
             continue
-        create_gate_tunnel_instance(gate, idx)
+        create_gate_tunnel_box_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 
