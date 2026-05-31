@@ -913,19 +913,33 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             # Front and back parapet rails.
             add_prism(-tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
             add_prism(-tw, tw, tt - parapet_w, tt, h, h + parapet_h)
+            # Left and right parapet rails.
+            add_prism(-tw, -tw + parapet_w, -tt, tt, h, h + parapet_h)
+            add_prism(tw - parapet_w, tw, -tt, tt, h, h + parapet_h)
 
             # Crenels: small raised blocks with configurable width/gap along each rail.
             if crenel_h > 1e-6 and crenel_w > 1e-6:
                 step = crenel_w + crenel_g
                 if step > 1e-6:
-                    rail_len = tw * 2.0
-                    offset = 0.0
-                    while offset + crenel_w <= rail_len + 1e-6:
-                        x0 = -tw + offset
+                    # Front/back rails (vary along X).
+                    rail_len_x = tw * 2.0
+                    offset_x = 0.0
+                    while offset_x + crenel_w <= rail_len_x + 1e-6:
+                        x0 = -tw + offset_x
                         x1 = min(tw, x0 + crenel_w)
                         add_prism(x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h)
                         add_prism(x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h)
-                        offset += step
+                        offset_x += step
+
+                    # Left/right rails (vary along Y).
+                    rail_len_y = tt * 2.0
+                    offset_y = 0.0
+                    while offset_y + crenel_w <= rail_len_y + 1e-6:
+                        y0 = -tt + offset_y
+                        y1 = min(tt, y0 + crenel_w)
+                        add_prism(-tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                        add_prism(tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                        offset_y += step
         bm.to_mesh(mesh)
         bm.free()
 
