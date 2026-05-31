@@ -15,7 +15,6 @@ TOWER_INSTANCE_TAG = "wp_wall_tower_instance"
 OPENING_TAG = "wp_wall_opening"
 GATE_TAG = "wp_wall_gate"
 GATE_INSTANCE_TAG = "wp_wall_gate_instance"
-BUILD_MARKER = "2026-05-31 tunnel-box-debug"
 
 
 def settings(scene):
@@ -894,7 +893,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         mat = bpy.data.materials.get("WP_Gate_Interior")
         if mat is None:
             mat = bpy.data.materials.new("WP_Gate_Interior")
-        mat.diffuse_color = (1.0, 0.18, 0.05, 1.0)
+        mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
         return mat
 
     def create_gate_tunnel_box_instance(gate_obj, idx):
@@ -915,17 +914,17 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         tunnel_obj[WALL_ID_TAG] = wall_id
         tunnel_obj.hide_render = False
         tunnel_obj.hide_set(False)
-        tunnel_obj.display_type = 'SOLID'
-        tunnel_obj.show_in_front = True
-        tunnel_obj.show_name = True
-        tunnel_obj.color = (1.0, 0.18, 0.05, 1.0)
+        tunnel_obj.display_type = 'TEXTURED'
+        tunnel_obj.show_in_front = False
+        tunnel_obj.show_name = False
+        tunnel_obj.color = (0.42, 0.42, 0.40, 1.0)
         tunnel_obj.data.materials.append(gate_tunnel_material())
         ensure_collection(context).objects.link(tunnel_obj)
 
-        # Debuggable masonry block inside the cutter's local tunnel volume.
+        # Solid ceiling block inside the cutter's local tunnel volume.
         local_box = (
-            Matrix.Translation(Vector((0.0, 0.0, 0.42)))
-            @ Matrix.Diagonal((0.85, 0.98, 0.32, 1.0))
+            Matrix.Translation(Vector((0.0, 0.0, 0.78)))
+            @ Matrix.Diagonal((0.82, 0.98, 0.24, 1.0))
         )
         tunnel_obj.matrix_world = gate_obj.matrix_world @ local_box
         parent_keep_transform(tunnel_obj, wall_obj)
