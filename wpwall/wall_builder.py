@@ -914,36 +914,49 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         inner_shoulder = outer_shoulder
         inner_radius = 0.36
         inner_inset = 0.03
-        outer_edge_height = outer_shoulder + max(0.0, outer_radius * outer_radius - inner_half * inner_half) ** 0.5
 
-        def add_prism(x0, x1, z0, z1):
-            verts = [
-                bm.verts.new((x0, y_front, z0)),
-                bm.verts.new((x1, y_front, z0)),
-                bm.verts.new((x1, y_back, z0)),
-                bm.verts.new((x0, y_back, z0)),
-                bm.verts.new((x0, y_front, z1)),
-                bm.verts.new((x1, y_front, z1)),
-                bm.verts.new((x1, y_back, z1)),
-                bm.verts.new((x0, y_back, z1)),
-            ]
+        def outer_arch_z(x):
+            return outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
+
+        def add_curved_side_strip(x0, x1, strip_steps=4):
+            front_bottom = []
+            back_bottom = []
+            front_top = []
+            back_top = []
+            for strip_step in range(max(1, int(strip_steps)) + 1):
+                t = strip_step / max(1, int(strip_steps))
+                x = x0 + ((x1 - x0) * t)
+                z = outer_arch_z(x)
+                front_bottom.append(bm.verts.new((x, y_front, 0.0)))
+                back_bottom.append(bm.verts.new((x, y_back, 0.0)))
+                front_top.append(bm.verts.new((x, y_front, z)))
+                back_top.append(bm.verts.new((x, y_back, z)))
+
+            for strip_step in range(len(front_bottom) - 1):
+                faces = (
+                    (front_bottom[strip_step], front_bottom[strip_step + 1], back_bottom[strip_step + 1], back_bottom[strip_step]),
+                    (front_top[strip_step], back_top[strip_step], back_top[strip_step + 1], front_top[strip_step + 1]),
+                    (front_bottom[strip_step], front_top[strip_step], front_top[strip_step + 1], front_bottom[strip_step + 1]),
+                    (back_bottom[strip_step + 1], back_top[strip_step + 1], back_top[strip_step], back_bottom[strip_step]),
+                )
+                for face in faces:
+                    try:
+                        bm.faces.new(face)
+                    except ValueError:
+                        pass
+
             for face in (
-                (verts[0], verts[1], verts[2], verts[3]),
-                (verts[4], verts[7], verts[6], verts[5]),
-                (verts[0], verts[4], verts[5], verts[1]),
-                (verts[1], verts[5], verts[6], verts[2]),
-                (verts[2], verts[6], verts[7], verts[3]),
-                (verts[3], verts[7], verts[4], verts[0]),
+                (front_bottom[0], back_bottom[0], back_top[0], front_top[0]),
+                (front_bottom[-1], front_top[-1], back_top[-1], back_bottom[-1]),
             ):
                 try:
                     bm.faces.new(face)
                 except ValueError:
                     pass
 
-        # Vertical side jambs around the arched void. Match the outer arch edge
-        # height so the visible outside silhouette has no stepped side cuts.
-        add_prism(outer_left, -inner_half, 0.0, outer_edge_height)
-        add_prism(inner_half, outer_right, 0.0, outer_edge_height)
+        # Side jambs follow the outer arch curve instead of ending with a flat step.
+        add_curved_side_strip(outer_left, -inner_half)
+        add_curved_side_strip(inner_half, outer_right)
 
         inner_front = []
         inner_back = []
@@ -954,7 +967,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             x = -inner_half + (inner_half * 2.0 * t)
             arch_z = inner_shoulder + max(0.0, inner_radius * inner_radius - x * x) ** 0.5
             inner_z = max(0.0, arch_z - inner_inset)
-            outer_z = outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
+            outer_z = outer_arch_z(x)
             inner_front.append(bm.verts.new((x, y_front, inner_z)))
             inner_back.append(bm.verts.new((x, y_back, inner_z)))
             outer_front.append(bm.verts.new((x, y_front, outer_z)))
