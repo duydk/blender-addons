@@ -8,6 +8,18 @@ bl_info = {
     "category": "Add Mesh",
 }
 
+if "core" in locals():
+    import importlib
+
+    from .wpwall import handlers, props_ops, ui, wall_builder
+    from . import core
+
+    importlib.reload(wall_builder)
+    importlib.reload(props_ops)
+    importlib.reload(ui)
+    importlib.reload(handlers)
+    importlib.reload(core)
+
 from .core import register, unregister
 
 
