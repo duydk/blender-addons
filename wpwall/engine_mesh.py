@@ -1,17 +1,5 @@
-from . import engine_common as _engine_common
-from . import engine_instances as _engine_instances
-
-# Preserve access to internal helper symbols (including underscore-prefixed ones)
-# after splitting modules.
-for _name in dir(_engine_common):
-    if _name.startswith("__"):
-        continue
-    globals()[_name] = getattr(_engine_common, _name)
-
-for _name in dir(_engine_instances):
-    if _name.startswith("__"):
-        continue
-    globals()[_name] = getattr(_engine_instances, _name)
+from .engine_common import *
+from .engine_instances import *
 
 def build_wall_mesh(scene, context=None):
     s = settings(scene)
@@ -349,4 +337,5 @@ def build_wall_mesh(scene, context=None):
             tower_points.append(inv @ obj.matrix_world.translation.copy())
     rebuild_tower_instances(scene, ctx, rig, wall_obj, raw_waypoints, tower_points if len(tower_points) >= 1 else [])
     rebuild_gate_instances(scene, ctx, rig, wall_obj)
+
 
