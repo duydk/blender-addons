@@ -12,7 +12,7 @@ import bpy
 import bmesh
 from math import acos, atan2, cos, pi, sin, tan
 from mathutils import Matrix, Vector
-from bpy.props import BoolProperty, CollectionProperty, FloatProperty, IntProperty, PointerProperty
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty
 from bpy.types import Operator, Panel, PropertyGroup
 
 ADDON_TAG = "WP_WALL_PCG"
@@ -443,27 +443,97 @@ def _append_unique(points, point, eps=1e-5):
         points.append(point)
 
 
+def gate_style_items():
+    return [
+        ('ARCH', "Arch", "Rounded arch gate opening"),
+        ('RECT', "Rectangle", "Flat-top rectangular gate opening"),
+        ('POINTED', "Pointed", "Pointed arch gate opening"),
+        ('HORSESHOE', "Horseshoe", "Tall rounded horseshoe opening"),
+    ]
+
+
+def get_gate_style(obj, default='ARCH'):
+    if not object_is_valid(obj):
+        return default
+    if hasattr(obj, "wp_wall_gate_style"):
+        try:
+            value = str(obj.wp_wall_gate_style)
+            if value in {'ARCH', 'RECT', 'POINTED', 'HORSESHOE'}:
+                return value
+        except Exception:
+            pass
+    if "wp_wall_gate_style" in obj:
+        try:
+            value = str(obj["wp_wall_gate_style"])
+            if value in {'ARCH', 'RECT', 'POINTED', 'HORSESHOE'}:
+                return value
+        except Exception:
+            pass
+    return default
+
+
+def set_gate_style(obj, value):
+    value = str(value)
+    if value not in {'ARCH', 'RECT', 'POINTED', 'HORSESHOE'}:
+        value = 'ARCH'
+    if hasattr(obj, "wp_wall_gate_style"):
+        obj.wp_wall_gate_style = value
+    obj["wp_wall_gate_style"] = value
+
+
 def rebuild_gate_cutter_mesh(obj, arc_steps=12):
     if not object_is_valid(obj) or obj.type != 'MESH' or obj.data is None:
         return
 
     mesh = obj.data
     bm = bmesh.new()
-    shoulder_z = 0.5
-    radius = 0.5
+    style = get_gate_style(obj, 'ARCH')
     front_y = -0.5
     back_y = 0.5
 
-    profile = [
-        Vector((-0.5, 0.0)),
-        Vector((0.5, 0.0)),
-        Vector((0.5, shoulder_z)),
-    ]
-    step_count = max(2, arc_steps)
-    for step in range(1, step_count):
-        angle = (step / step_count) * pi
-        profile.append(Vector((cos(angle) * radius, shoulder_z + sin(angle) * radius)))
-    profile.append(Vector((-0.5, shoulder_z)))
+    if style == 'RECT':
+        profile = [
+            Vector((-0.5, 0.0)),
+            Vector((0.5, 0.0)),
+            Vector((0.5, 1.0)),
+            Vector((-0.5, 1.0)),
+        ]
+    elif style == 'POINTED':
+        shoulder_z = 0.5
+        profile = [
+            Vector((-0.5, 0.0)),
+            Vector((0.5, 0.0)),
+            Vector((0.5, shoulder_z)),
+            Vector((0.0, 1.15)),
+            Vector((-0.5, shoulder_z)),
+        ]
+    elif style == 'HORSESHOE':
+        shoulder_z = 0.28
+        radius_x = 0.5
+        radius_z = 0.72
+        profile = [
+            Vector((-0.5, 0.0)),
+            Vector((0.5, 0.0)),
+            Vector((0.5, shoulder_z)),
+        ]
+        step_count = max(3, arc_steps)
+        for step in range(1, step_count):
+            angle = (step / step_count) * pi
+            profile.append(Vector((cos(angle) * radius_x, shoulder_z + sin(angle) * radius_z)))
+        profile.append(Vector((-0.5, shoulder_z)))
+    else:
+        shoulder_z = 0.5
+        radius = 0.5
+        profile = [
+            Vector((-0.5, 0.0)),
+            Vector((0.5, 0.0)),
+            Vector((0.5, shoulder_z)),
+        ]
+        step_count = max(2, arc_steps)
+        for step in range(1, step_count):
+            angle = (step / step_count) * pi
+            profile.append(Vector((cos(angle) * radius, shoulder_z + sin(angle) * radius)))
+        profile.append(Vector((-0.5, shoulder_z)))
 
     front = [bm.verts.new((point.x, front_y, point.y)) for point in profile]
     back = [bm.verts.new((point.x, back_y, point.y)) for point in profile]
@@ -1133,6 +1203,7 @@ class WPWallSettings(PropertyGroup):
     tower_rotation: FloatProperty(name="Tower Rotation", default=0.0, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
     gate_length: FloatProperty(name="Gate Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_length(self, ctx))
     gate_height: FloatProperty(name="Gate Height", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_height(self, ctx))
+    gate_style: EnumProperty(name="Gate Style", items=gate_style_items(), default='ARCH', update=lambda self, ctx: set_scene_gate_style(self, ctx))
     opening_length: FloatProperty(name="Opening Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_opening_length(self, ctx))
     waypoint_display_size: FloatProperty(name="Waypoint Size", default=0.5, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     collection_name: bpy.props.StringProperty(name="Collection", default="WP_Wall_PCG")
@@ -1278,6 +1349,29 @@ def set_scene_gate_height(self, context):
                     break
         if object_is_valid(active) and active.get(GATE_TAG):
             set_gate_height(active, self.gate_height)
+    trigger_rebuild(context)
+
+
+def update_gate_style_object(self, context):
+    trigger_rebuild(context)
+
+
+def set_scene_gate_style(self, context):
+    rig = active_rig(context) if context else None
+    gates = sorted_gates(context.scene, rig) if context and context.scene else []
+    if gates:
+        for gate in gates:
+            if object_is_valid(gate):
+                set_gate_style(gate, self.gate_style)
+    else:
+        active = getattr(context, "active_object", None)
+        if not (object_is_valid(active) and active.get(GATE_TAG)):
+            for obj in getattr(context, "selected_objects", []):
+                if object_is_valid(obj) and obj.get(GATE_TAG):
+                    active = obj
+                    break
+        if object_is_valid(active) and active.get(GATE_TAG):
+            set_gate_style(active, self.gate_style)
     trigger_rebuild(context)
 
 
@@ -1480,6 +1574,7 @@ class WPWALL_OT_add_gate(Operator):
         obj.location = location
         set_gate_length(obj, scene.wp_wall_settings.gate_length)
         set_gate_height(obj, scene.wp_wall_settings.gate_height)
+        set_gate_style(obj, scene.wp_wall_settings.gate_style)
         rebuild_gate_cutter_mesh(obj)
         coll.objects.link(obj)
         parent_keep_transform(obj, wall)
@@ -1656,6 +1751,8 @@ def draw_main_panel(layout, context):
             box = layout.box()
             box.label(text=f"Gate: {active.name}")
             col = box.column(align=True)
+            col.prop(active, "wp_wall_gate_style")
+            col.prop(s, "gate_style", text="Default Style")
             col.prop(s, "gate_length")
             col.prop(s, "gate_height")
             box.label(text="Drag it to update its position on the wall")
@@ -1819,6 +1916,12 @@ def register():
         min=0.05,
         update=update_gate_height_object,
     )
+    bpy.types.Object.wp_wall_gate_style = EnumProperty(
+        name="Gate Style",
+        items=gate_style_items(),
+        default='ARCH',
+        update=update_gate_style_object,
+    )
     bpy.types.Scene.wp_wall_settings = PointerProperty(type=WPWallSettings)
     bpy.types.Scene.wp_wall_waypoints = CollectionProperty(type=WPWallWaypointRef)
     bpy.types.Scene.wp_wall_active_rig = PointerProperty(name="Active Wall Rig", type=bpy.types.Object)
@@ -1830,6 +1933,7 @@ def register():
 def unregister():
     if depsgraph_update_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_handler)
+    del bpy.types.Object.wp_wall_gate_style
     del bpy.types.Object.wp_wall_gate_height
     del bpy.types.Object.wp_wall_gate_length
     del bpy.types.Object.wp_wall_opening_length
