@@ -452,6 +452,13 @@ def gate_style_items():
     ]
 
 
+def gate_base_items():
+    return [
+        ('NONE', "None", "No gate base"),
+        ('FORTIFIED', "Fortified Base", "Add a fortified base block around the gate"),
+    ]
+
+
 def get_gate_style(obj, default='ARCH'):
     if not object_is_valid(obj):
         return default
@@ -479,6 +486,35 @@ def set_gate_style(obj, value):
     if hasattr(obj, "wp_wall_gate_style"):
         obj.wp_wall_gate_style = value
     obj["wp_wall_gate_style"] = value
+
+
+def get_gate_base_style(obj, default='NONE'):
+    if not object_is_valid(obj):
+        return default
+    if hasattr(obj, "wp_wall_gate_base_style"):
+        try:
+            value = str(obj.wp_wall_gate_base_style)
+            if value in {'NONE', 'FORTIFIED'}:
+                return value
+        except Exception:
+            pass
+    if "wp_wall_gate_base_style" in obj:
+        try:
+            value = str(obj["wp_wall_gate_base_style"])
+            if value in {'NONE', 'FORTIFIED'}:
+                return value
+        except Exception:
+            pass
+    return default
+
+
+def set_gate_base_style(obj, value):
+    value = str(value)
+    if value not in {'NONE', 'FORTIFIED'}:
+        value = 'NONE'
+    if hasattr(obj, "wp_wall_gate_base_style"):
+        obj.wp_wall_gate_base_style = value
+    obj["wp_wall_gate_base_style"] = value
 
 
 def rebuild_gate_cutter_mesh(obj, arc_steps=12):
@@ -780,7 +816,50 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
 
 def rebuild_gate_instances(scene, context, rig, wall_obj):
     clear_gate_instances(rig)
-    return
+    s = settings(scene)
+    wall_id = wall_id_from_obj(rig)
+    inv = wall_obj.matrix_world.inverted_safe()
+
+    gates = sorted_gates(scene, rig)
+    if not gates:
+        return
+
+    for idx, gate in enumerate(gates):
+        if not object_is_valid(gate):
+            continue
+        if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
+            continue
+
+        gate_length = max(0.05, get_gate_length(gate, s.gate_length))
+        base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
+        base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
+        base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
+
+        local_gate_m = inv @ gate.matrix_world
+        local_gate_pos = local_gate_m.translation.copy()
+        local_yaw = local_gate_m.to_euler('XYZ').z
+
+        mesh = bpy.data.meshes.new(f"GATE_BASE_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bm.to_mesh(mesh)
+        bm.free()
+
+        instance = bpy.data.objects.new(f"GATE_BASE_{wall_id:03d}_{idx:03d}", mesh)
+        instance[ADDON_TAG] = True
+        instance[GATE_INSTANCE_TAG] = True
+        instance[WALL_ID_TAG] = wall_id
+        instance.hide_render = False
+        instance.hide_set(False)
+        ensure_collection(context).objects.link(instance)
+
+        placement_local = (
+            Matrix.Translation(Vector((local_gate_pos.x, local_gate_pos.y, base_height * 0.5)))
+            @ Matrix.Rotation(local_yaw, 4, 'Z')
+            @ Matrix.Diagonal((base_width, base_thickness, base_height, 1.0))
+        )
+        instance.matrix_world = wall_obj.matrix_world @ placement_local
+        parent_keep_transform(instance, wall_obj)
 
 
 def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_points):
@@ -1204,6 +1283,10 @@ class WPWallSettings(PropertyGroup):
     gate_length: FloatProperty(name="Gate Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_length(self, ctx))
     gate_height: FloatProperty(name="Gate Height", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_height(self, ctx))
     gate_style: EnumProperty(name="Gate Style", items=gate_style_items(), default='ARCH', update=lambda self, ctx: set_scene_gate_style(self, ctx))
+    gate_base_style: EnumProperty(name="Gate Base", items=gate_base_items(), default='NONE', update=lambda self, ctx: set_scene_gate_base_style(self, ctx))
+    gate_base_width_mult: FloatProperty(name="Base Width x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_base_thickness_mult: FloatProperty(name="Base Thickness x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_base_height_mult: FloatProperty(name="Base Height x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     opening_length: FloatProperty(name="Opening Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_opening_length(self, ctx))
     waypoint_display_size: FloatProperty(name="Waypoint Size", default=0.5, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     collection_name: bpy.props.StringProperty(name="Collection", default="WP_Wall_PCG")
@@ -1372,6 +1455,29 @@ def set_scene_gate_style(self, context):
                     break
         if object_is_valid(active) and active.get(GATE_TAG):
             set_gate_style(active, self.gate_style)
+    trigger_rebuild(context)
+
+
+def update_gate_base_style_object(self, context):
+    trigger_rebuild(context)
+
+
+def set_scene_gate_base_style(self, context):
+    rig = active_rig(context) if context else None
+    gates = sorted_gates(context.scene, rig) if context and context.scene else []
+    if gates:
+        for gate in gates:
+            if object_is_valid(gate):
+                set_gate_base_style(gate, self.gate_base_style)
+    else:
+        active = getattr(context, "active_object", None)
+        if not (object_is_valid(active) and active.get(GATE_TAG)):
+            for obj in getattr(context, "selected_objects", []):
+                if object_is_valid(obj) and obj.get(GATE_TAG):
+                    active = obj
+                    break
+        if object_is_valid(active) and active.get(GATE_TAG):
+            set_gate_base_style(active, self.gate_base_style)
     trigger_rebuild(context)
 
 
@@ -1575,6 +1681,7 @@ class WPWALL_OT_add_gate(Operator):
         set_gate_length(obj, scene.wp_wall_settings.gate_length)
         set_gate_height(obj, scene.wp_wall_settings.gate_height)
         set_gate_style(obj, scene.wp_wall_settings.gate_style)
+        set_gate_base_style(obj, scene.wp_wall_settings.gate_base_style)
         rebuild_gate_cutter_mesh(obj)
         coll.objects.link(obj)
         parent_keep_transform(obj, wall)
@@ -1752,8 +1859,15 @@ def draw_main_panel(layout, context):
             box.label(text=f"Gate: {active.name}")
             col = box.column(align=True)
             col.prop(active, "wp_wall_gate_style")
+            col.prop(active, "wp_wall_gate_base_style")
             col.prop(s, "gate_length")
             col.prop(s, "gate_height")
+            if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
+                base_col = box.column(align=True)
+                base_col.label(text="Fortified Base")
+                base_col.prop(s, "gate_base_width_mult")
+                base_col.prop(s, "gate_base_thickness_mult")
+                base_col.prop(s, "gate_base_height_mult")
             box.label(text="Drag it to update its position on the wall")
         elif active_is_wall or object_is_valid(rig):
             box = layout.box()
@@ -1767,6 +1881,15 @@ def draw_main_panel(layout, context):
             col.prop(s, "crenel_width")
             col.prop(s, "crenel_gap")
             col.prop(s, "crenel_end_caps")
+            gate_box = layout.box()
+            gate_box.label(text="Gate Defaults")
+            gcol = gate_box.column(align=True)
+            gcol.prop(s, "gate_style")
+            gcol.prop(s, "gate_base_style")
+            if s.gate_base_style == 'FORTIFIED':
+                gcol.prop(s, "gate_base_width_mult")
+                gcol.prop(s, "gate_base_thickness_mult")
+                gcol.prop(s, "gate_base_height_mult")
         else:
             hint = layout.box()
             hint.label(text="Select a wall part to edit its settings")
@@ -1921,6 +2044,12 @@ def register():
         default='ARCH',
         update=update_gate_style_object,
     )
+    bpy.types.Object.wp_wall_gate_base_style = EnumProperty(
+        name="Gate Base",
+        items=gate_base_items(),
+        default='NONE',
+        update=update_gate_base_style_object,
+    )
     bpy.types.Scene.wp_wall_settings = PointerProperty(type=WPWallSettings)
     bpy.types.Scene.wp_wall_waypoints = CollectionProperty(type=WPWallWaypointRef)
     bpy.types.Scene.wp_wall_active_rig = PointerProperty(name="Active Wall Rig", type=bpy.types.Object)
@@ -1932,6 +2061,7 @@ def register():
 def unregister():
     if depsgraph_update_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_handler)
+    del bpy.types.Object.wp_wall_gate_base_style
     del bpy.types.Object.wp_wall_gate_style
     del bpy.types.Object.wp_wall_gate_height
     del bpy.types.Object.wp_wall_gate_length
