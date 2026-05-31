@@ -837,6 +837,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
         base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
         base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
+        bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
+        bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
 
         local_gate_m = inv @ gate.matrix_world
         local_gate_pos = local_gate_m.translation.copy()
@@ -844,7 +846,32 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
 
         mesh = bpy.data.meshes.new(f"GATE_BASE_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
+        tw = base_width * 0.5
+        tt = base_thickness * 0.5
+        bw = bottom_width * 0.5
+        bt = bottom_thickness * 0.5
+        h = base_height
+
+        v0 = bm.verts.new((-bw, -bt, 0.0))
+        v1 = bm.verts.new((bw, -bt, 0.0))
+        v2 = bm.verts.new((bw, bt, 0.0))
+        v3 = bm.verts.new((-bw, bt, 0.0))
+        v4 = bm.verts.new((-tw, -tt, h))
+        v5 = bm.verts.new((tw, -tt, h))
+        v6 = bm.verts.new((tw, tt, h))
+        v7 = bm.verts.new((-tw, tt, h))
+        for face in (
+            (v0, v1, v2, v3),
+            (v4, v7, v6, v5),
+            (v0, v4, v5, v1),
+            (v1, v5, v6, v2),
+            (v2, v6, v7, v3),
+            (v3, v7, v4, v0),
+        ):
+            try:
+                bm.faces.new(face)
+            except ValueError:
+                pass
         bm.to_mesh(mesh)
         bm.free()
 
@@ -857,9 +884,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         ensure_collection(context).objects.link(instance)
 
         placement_local = (
-            Matrix.Translation(Vector((local_gate_pos.x, local_gate_pos.y, base_height * 0.5)))
+            Matrix.Translation(Vector((local_gate_pos.x, local_gate_pos.y, 0.0)))
             @ Matrix.Rotation(local_yaw, 4, 'Z')
-            @ Matrix.Diagonal((base_width, base_thickness, base_height, 1.0))
         )
         instance.matrix_world = wall_obj.matrix_world @ placement_local
         parent_keep_transform(instance, wall_obj)
@@ -1296,6 +1322,8 @@ class WPWallSettings(PropertyGroup):
     gate_base_width_mult: FloatProperty(name="Base Width x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_base_thickness_mult: FloatProperty(name="Base Thickness x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_base_height_mult: FloatProperty(name="Base Height x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_base_bottom_width_mult: FloatProperty(name="Bottom Width x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_base_bottom_thickness_mult: FloatProperty(name="Bottom Thickness x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     opening_length: FloatProperty(name="Opening Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_opening_length(self, ctx))
     waypoint_display_size: FloatProperty(name="Waypoint Size", default=0.5, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     collection_name: bpy.props.StringProperty(name="Collection", default="WP_Wall_PCG")
@@ -1877,6 +1905,8 @@ def draw_main_panel(layout, context):
                 base_col.prop(s, "gate_base_width_mult")
                 base_col.prop(s, "gate_base_thickness_mult")
                 base_col.prop(s, "gate_base_height_mult")
+                base_col.prop(s, "gate_base_bottom_width_mult")
+                base_col.prop(s, "gate_base_bottom_thickness_mult")
             box.label(text="Drag it to update its position on the wall")
         elif active_is_wall or object_is_valid(rig):
             box = layout.box()
@@ -1899,6 +1929,8 @@ def draw_main_panel(layout, context):
                 gcol.prop(s, "gate_base_width_mult")
                 gcol.prop(s, "gate_base_thickness_mult")
                 gcol.prop(s, "gate_base_height_mult")
+                gcol.prop(s, "gate_base_bottom_width_mult")
+                gcol.prop(s, "gate_base_bottom_thickness_mult")
         else:
             hint = layout.box()
             hint.label(text="Select a wall part to edit its settings")
