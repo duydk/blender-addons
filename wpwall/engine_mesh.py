@@ -13,6 +13,14 @@ for _name in dir(_engine_instances):
         continue
     globals()[_name] = getattr(_engine_instances, _name)
 
+# Explicitly bind private helpers used by build_wall_mesh.
+# Relying only on wildcard-style propagation is brittle for underscore names.
+_safe_dir_2d = _engine_common._safe_dir_2d
+_miter_offset_point = _engine_common._miter_offset_point
+_clamp = _engine_common._clamp
+_segment_line_intersection_point_2d = _engine_common._segment_line_intersection_point_2d
+_turn_sign_2d = _engine_common._turn_sign_2d
+
 def build_wall_mesh(scene, context=None):
     s = settings(scene)
     ctx = context if context is not None else bpy.context
@@ -44,19 +52,19 @@ def build_wall_mesh(scene, context=None):
             if closed:
                 prev_p = points[(i - 1) % n]
                 next_p = points[(i + 1) % n]
-                plus.append(_engine_common._miter_offset_point(prev_p, p, next_p, half, +1.0))
-                minus.append(_engine_common._miter_offset_point(prev_p, p, next_p, half, -1.0))
+                plus.append(_miter_offset_point(prev_p, p, next_p, half, +1.0))
+                minus.append(_miter_offset_point(prev_p, p, next_p, half, -1.0))
                 continue
 
             if i == 0:
-                d = _engine_common._safe_dir_2d(points[0], points[1])
+                d = _safe_dir_2d(points[0], points[1])
                 if d is None:
                     continue
                 nrm = Vector((-d.y, d.x, 0.0))
                 plus.append(p + nrm * half)
                 minus.append(p - nrm * half)
             elif i == n - 1:
-                d = _engine_common._safe_dir_2d(points[n - 2], points[n - 1])
+                d = _safe_dir_2d(points[n - 2], points[n - 1])
                 if d is None:
                     continue
                 nrm = Vector((-d.y, d.x, 0.0))
@@ -65,8 +73,8 @@ def build_wall_mesh(scene, context=None):
             else:
                 prev_p = points[i - 1]
                 next_p = points[i + 1]
-                plus.append(_engine_common._miter_offset_point(prev_p, p, next_p, half, +1.0))
-                minus.append(_engine_common._miter_offset_point(prev_p, p, next_p, half, -1.0))
+                plus.append(_miter_offset_point(prev_p, p, next_p, half, +1.0))
+                minus.append(_miter_offset_point(prev_p, p, next_p, half, -1.0))
 
         if len(plus) == n and len(minus) == n:
             plus_b = [bm.verts.new(v) for v in plus]
@@ -74,7 +82,7 @@ def build_wall_mesh(scene, context=None):
             plus_t = [bm.verts.new(v + Vector((0.0, 0.0, s.wall_height))) for v in plus]
             minus_t = [bm.verts.new(v + Vector((0.0, 0.0, s.wall_height))) for v in minus]
             use_parapets = s.parapet_height > 1e-6 and s.parapet_width > 1e-6 and s.wall_thickness > 1e-6
-            parapet_ratio = _engine_common._clamp(s.parapet_width / max(s.wall_thickness, 1e-6), 0.0, 0.49) if use_parapets else 0.0
+            parapet_ratio = _clamp(s.parapet_width / max(s.wall_thickness, 1e-6), 0.0, 0.49) if use_parapets else 0.0
             plus_inner_t = []
             minus_inner_t = []
             plus_cap_t = []
@@ -100,12 +108,12 @@ def build_wall_mesh(scene, context=None):
                 k = None
                 if closed or j < n - 1:
                     k = (j + 1) % n
-                    turn_sign = _engine_common._turn_sign_2d(points[i], points[j], points[k])
+                    turn_sign = _turn_sign_2d(points[i], points[j], points[k])
                 faces = [[plus_b[i], plus_b[j], minus_b[j], minus_b[i]]]
                 if use_parapets:
                     if k is not None and abs(turn_sign) > 1e-8:
                         if turn_sign > 0.0:
-                            walk_cut = _engine_common._segment_line_intersection_point_2d(
+                            walk_cut = _segment_line_intersection_point_2d(
                                 minus_inner_t[i].co, minus_inner_t[j].co,
                                 plus_inner_t[j].co, plus_inner_t[k].co,
                             )
@@ -119,7 +127,7 @@ def build_wall_mesh(scene, context=None):
                             else:
                                 faces.extend([[plus_inner_t[j], plus_inner_t[i], minus_inner_t[i], minus_inner_t[j]]])
                         else:
-                            walk_cut = _engine_common._segment_line_intersection_point_2d(
+                            walk_cut = _segment_line_intersection_point_2d(
                                 plus_inner_t[i].co, plus_inner_t[j].co,
                                 minus_inner_t[j].co, minus_inner_t[k].co,
                             )
@@ -147,7 +155,7 @@ def build_wall_mesh(scene, context=None):
                 else:
                     if k is not None and abs(turn_sign) > 1e-8:
                         if turn_sign > 0.0:
-                            top_cut = _engine_common._segment_line_intersection_point_2d(
+                            top_cut = _segment_line_intersection_point_2d(
                                 minus_t[i].co, minus_t[j].co,
                                 plus_t[j].co, plus_t[k].co,
                             )
@@ -161,7 +169,7 @@ def build_wall_mesh(scene, context=None):
                             else:
                                 faces.extend([[plus_t[j], plus_t[i], minus_t[i], minus_t[j]]])
                         else:
-                            top_cut = _engine_common._segment_line_intersection_point_2d(
+                            top_cut = _segment_line_intersection_point_2d(
                                 plus_t[i].co, plus_t[j].co,
                                 minus_t[j].co, minus_t[k].co,
                             )
@@ -198,8 +206,8 @@ def build_wall_mesh(scene, context=None):
                         [plus_t[-1], plus_inner_t[-1], plus_inner_cap_t[-1], plus_cap_t[-1]],
                         [minus_inner_t[-1], minus_t[-1], minus_cap_t[-1], minus_inner_cap_t[-1]],
                     ])
-                    start_dir = _engine_common._safe_dir_2d(points[0], points[1])
-                    end_dir = _engine_common._safe_dir_2d(points[-2], points[-1])
+                    start_dir = _safe_dir_2d(points[0], points[1])
+                    end_dir = _safe_dir_2d(points[-2], points[-1])
                     if start_dir is not None:
                         start_in0 = plus_t[0].co.copy() + start_dir * s.parapet_width
                         start_in1 = minus_t[0].co.copy() + start_dir * s.parapet_width
@@ -239,7 +247,7 @@ def build_wall_mesh(scene, context=None):
                 step = max(1e-4, s.crenel_width + s.crenel_gap)
                 for i in range(edge_count):
                     j = (i + 1) % n
-                    tangent = _engine_common._safe_dir_2d(points[i], points[j])
+                    tangent = _safe_dir_2d(points[i], points[j])
                     if tangent is None:
                         continue
                     normal = Vector((-tangent.y, tangent.x, 0.0))
@@ -286,7 +294,7 @@ def build_wall_mesh(scene, context=None):
                         (minus[-1], plus[-1], points[-1], True),
                     ]
                     for outer_a, outer_b, center_p, is_end in end_faces:
-                        wall_dir = _engine_common._safe_dir_2d(points[0], points[1]) if not is_end else _engine_common._safe_dir_2d(points[-2], points[-1])
+                        wall_dir = _safe_dir_2d(points[0], points[1]) if not is_end else _safe_dir_2d(points[-2], points[-1])
                         if wall_dir is None:
                             continue
                         inward = wall_dir if not is_end else -wall_dir
