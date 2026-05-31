@@ -844,9 +844,17 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         facet_obj[WALL_ID_TAG] = wall_id
         facet_obj.hide_render = False
         facet_obj.hide_set(False)
+        facet_obj.display_type = 'TEXTURED'
         ensure_collection(context).objects.link(facet_obj)
         facet_obj.matrix_world = gate_obj.matrix_world.copy()
         parent_keep_transform(facet_obj, wall_obj)
+
+        # Give liner facets actual thickness so they don't render as paper-thin
+        # and to prevent viewport see-through artifacts.
+        solid = facet_obj.modifiers.new(name="WP_GateFacetSolid", type='SOLIDIFY')
+        solid.thickness = max(0.01, s.wall_thickness * 0.12)
+        solid.offset = 0.0
+        solid.use_even_offset = True
 
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
@@ -1373,4 +1381,3 @@ def build_wall_mesh(scene, context=None):
             tower_points.append(inv @ obj.matrix_world.translation.copy())
     rebuild_tower_instances(scene, ctx, rig, wall_obj, raw_waypoints, tower_points if len(tower_points) >= 1 else [])
     rebuild_gate_instances(scene, ctx, rig, wall_obj)
-
