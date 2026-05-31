@@ -27,6 +27,7 @@ def draw_main_panel(layout, context):
     col.operator("wpwall.add_gate", icon='MOD_BOOLEAN')
     row = col.row(align=True)
     row.operator("wpwall.remove_last_waypoint", icon='REMOVE')
+    row.operator("wpwall.remove_selected_waypoint", icon='X', text="")
     row.operator("wpwall.remove_last_opening", icon='X', text="")
     row.operator("wpwall.remove_last_gate", icon='PANEL_CLOSE', text="")
     nav = col.row(align=True)

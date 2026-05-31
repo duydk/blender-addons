@@ -515,6 +515,44 @@ class WPWALL_OT_remove_last_waypoint(Operator):
         return {'FINISHED'}
 
 
+class WPWALL_OT_remove_selected_waypoint(Operator):
+    bl_idname = "wpwall.remove_selected_waypoint"
+    bl_label = "Remove Selected Waypoint"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        active = getattr(context, "active_object", None)
+        return object_is_valid(active) and active.get(WAYPOINT_TAG)
+
+    def execute(self, context):
+        scene = context.scene
+        rig = active_rig(context)
+        wall_id = wall_id_from_obj(rig) if object_is_valid(rig) else None
+        obj = context.active_object
+        if not object_is_valid(obj) or not obj.get(WAYPOINT_TAG):
+            self.report({'WARNING'}, "Select a waypoint to remove")
+            return {'CANCELLED'}
+        if wall_id is not None and obj.get(WALL_ID_TAG) != wall_id:
+            self.report({'WARNING'}, "Selected waypoint is not on the active wall")
+            return {'CANCELLED'}
+
+        removed = False
+        for idx, ref in enumerate(scene.wp_wall_waypoints):
+            if ref.obj == obj:
+                scene.wp_wall_waypoints.remove(idx)
+                removed = True
+                break
+        if not removed:
+            self.report({'WARNING'}, "Selected waypoint is not registered")
+            return {'CANCELLED'}
+
+        bpy.data.objects.remove(obj, do_unlink=True)
+        refresh_waypoint_orders(scene, rig)
+        build_wall_mesh(scene, context)
+        return {'FINISHED'}
+
+
 class WPWALL_OT_build_wall(Operator):
     bl_idname = "wpwall.build_wall"
     bl_label = "Rebuild Wall"
