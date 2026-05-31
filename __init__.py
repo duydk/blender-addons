@@ -299,6 +299,7 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
         return
     closed = bool(s.closed_loop and len(local_points) > 2)
     cut_depth = max(0.05, s.wall_thickness + 0.05)
+    fortified_depth = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult) + 0.05)
     floor_overcut = 0.05
     inv = wall_obj.matrix_world.inverted_safe()
 
@@ -313,6 +314,8 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
         _seg_idx, snapped, tangent = hit
         if tangent is None:
             tangent = Vector((1.0, 0.0, 0.0))
+        gate_base_style = get_gate_base_style(gate, s.gate_base_style)
+        gate_cut_depth = fortified_depth if gate_base_style == 'FORTIFIED' else cut_depth
         cut_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height))
         angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
         local_matrix = (
@@ -320,7 +323,7 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
             @ Matrix.Rotation(angle, 4, 'Z')
             @ Matrix.Diagonal((
                 max(0.05, get_gate_length(gate, s.gate_length)),
-                cut_depth,
+                gate_cut_depth,
                 cut_height + floor_overcut,
                 1.0,
             ))
