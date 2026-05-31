@@ -914,6 +914,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         inner_shoulder = outer_shoulder
         inner_radius = 0.36
         inner_inset = 0.0
+        z_lift = 0.03
 
         def outer_arch_z(x):
             return outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
@@ -927,10 +928,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 t = strip_step / max(1, int(strip_steps))
                 x = x0 + ((x1 - x0) * t)
                 z = outer_arch_z(x)
-                front_bottom.append(bm.verts.new((x, y_front, 0.0)))
-                back_bottom.append(bm.verts.new((x, y_back, 0.0)))
-                front_top.append(bm.verts.new((x, y_front, z)))
-                back_top.append(bm.verts.new((x, y_back, z)))
+                front_bottom.append(bm.verts.new((x, y_front, z_lift)))
+                back_bottom.append(bm.verts.new((x, y_back, z_lift)))
+                front_top.append(bm.verts.new((x, y_front, z + z_lift)))
+                back_top.append(bm.verts.new((x, y_back, z + z_lift)))
 
             for strip_step in range(len(front_bottom) - 1):
                 faces = (
@@ -968,10 +969,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             arch_z = inner_shoulder + max(0.0, inner_radius * inner_radius - x * x) ** 0.5
             inner_z = max(0.0, arch_z - inner_inset)
             outer_z = outer_arch_z(x)
-            inner_front.append(bm.verts.new((x, y_front, inner_z)))
-            inner_back.append(bm.verts.new((x, y_back, inner_z)))
-            outer_front.append(bm.verts.new((x, y_front, outer_z)))
-            outer_back.append(bm.verts.new((x, y_back, outer_z)))
+            inner_front.append(bm.verts.new((x, y_front, inner_z + z_lift)))
+            inner_back.append(bm.verts.new((x, y_back, inner_z + z_lift)))
+            outer_front.append(bm.verts.new((x, y_front, outer_z + z_lift)))
+            outer_back.append(bm.verts.new((x, y_back, outer_z + z_lift)))
 
         # Curved top masonry between the inner opening arch and outer arch.
         for step in range(step_count):
