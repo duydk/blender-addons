@@ -823,6 +823,13 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
     if not gates:
         return
 
+    def gate_interior_material():
+        mat = bpy.data.materials.get("WP_Gate_Interior")
+        if mat is None:
+            mat = bpy.data.materials.new("WP_Gate_Interior")
+            mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
+        return mat
+
     def create_gate_facet_instance(gate_obj, idx):
         if not object_is_valid(gate_obj) or gate_obj.type != 'MESH' or gate_obj.data is None:
             return
@@ -856,33 +863,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         solid.offset = 0.0
         solid.use_even_offset = True
 
-    def create_gate_ceiling_instance(gate_obj, idx):
-        if not object_is_valid(gate_obj):
-            return
-        mesh = bpy.data.meshes.new(f"GATE_CEIL_{wall_id:03d}_{idx:03d}_mesh")
-        bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
-        bm.to_mesh(mesh)
-        bm.free()
-        mesh.update()
-
-        ceil_obj = bpy.data.objects.new(f"GATE_CEIL_{wall_id:03d}_{idx:03d}", mesh)
-        ceil_obj[ADDON_TAG] = True
-        ceil_obj[GATE_INSTANCE_TAG] = True
-        ceil_obj[WALL_ID_TAG] = wall_id
-        ceil_obj.hide_render = False
-        ceil_obj.hide_set(False)
-        ensure_collection(context).objects.link(ceil_obj)
-
-        # Build a solid "roof" inside the gate tunnel in cutter-local space.
-        # Unit cutter profile has top around z=1.0, so z~0.78 gives a robust ceiling.
-        local_roof = (
-            Matrix.Translation(Vector((0.0, 0.0, 0.78)))
-            @ Matrix.Diagonal((0.90, 1.02, 0.18, 1.0))
-        )
-        ceil_obj.matrix_world = gate_obj.matrix_world @ local_roof
-        parent_keep_transform(ceil_obj, wall_obj)
-
     def create_gate_arch_runner_instance(gate_obj, idx, steps=16):
         if not object_is_valid(gate_obj):
             return
@@ -895,6 +875,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         radius = 0.5
         shoulder_z = 0.5
         top_z = 1.08
+        inset = 0.08
 
         underside_front = []
         underside_back = []
@@ -904,7 +885,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         for i in range(step_count + 1):
             t = i / step_count
             x = -0.5 + t
-            z = shoulder_z + max(0.0, radius * radius - x * x) ** 0.5
+            z = max(0.0, shoulder_z + max(0.0, radius * radius - x * x) ** 0.5 - inset)
             underside_front.append(bm.verts.new((x, y_front, z)))
             underside_back.append(bm.verts.new((x, y_back, z)))
             top_front.append(bm.verts.new((x, y_front, top_z)))
@@ -947,6 +928,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         arch_obj[WALL_ID_TAG] = wall_id
         arch_obj.hide_render = False
         arch_obj.hide_set(False)
+        arch_obj.display_type = 'TEXTURED'
+        arch_obj.data.materials.append(gate_interior_material())
         ensure_collection(context).objects.link(arch_obj)
 
         arch_obj.matrix_world = gate_obj.matrix_world.copy()
@@ -956,7 +939,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         if not object_is_valid(gate):
             continue
         create_gate_facet_instance(gate, idx)
-        create_gate_ceiling_instance(gate, idx)
         create_gate_arch_runner_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
