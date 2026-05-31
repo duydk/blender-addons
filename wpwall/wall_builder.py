@@ -906,32 +906,63 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         step_count = max(8, int(steps))
         y_front = -0.51
         y_back = 0.51
-        radius = 0.5
-        shoulder_z = 0.5
-        top_z = 1.08
-        underside_inset = 0.06
+        outer_left = -0.5
+        outer_right = 0.5
+        outer_top = 1.0
+        inner_half = 0.36
+        inner_shoulder = 0.44
+        inner_radius = 0.36
+        inner_inset = 0.03
 
-        underside_front = []
-        underside_back = []
-        top_front = []
-        top_back = []
+        def add_prism(x0, x1, z0, z1):
+            verts = [
+                bm.verts.new((x0, y_front, z0)),
+                bm.verts.new((x1, y_front, z0)),
+                bm.verts.new((x1, y_back, z0)),
+                bm.verts.new((x0, y_back, z0)),
+                bm.verts.new((x0, y_front, z1)),
+                bm.verts.new((x1, y_front, z1)),
+                bm.verts.new((x1, y_back, z1)),
+                bm.verts.new((x0, y_back, z1)),
+            ]
+            for face in (
+                (verts[0], verts[1], verts[2], verts[3]),
+                (verts[4], verts[7], verts[6], verts[5]),
+                (verts[0], verts[4], verts[5], verts[1]),
+                (verts[1], verts[5], verts[6], verts[2]),
+                (verts[2], verts[6], verts[7], verts[3]),
+                (verts[3], verts[7], verts[4], verts[0]),
+            ):
+                try:
+                    bm.faces.new(face)
+                except ValueError:
+                    pass
 
+        # Vertical side jambs around the arched void.
+        add_prism(outer_left, -inner_half, 0.0, outer_top)
+        add_prism(inner_half, outer_right, 0.0, outer_top)
+
+        inner_front = []
+        inner_back = []
+        outer_front = []
+        outer_back = []
         for step in range(step_count + 1):
             t = step / step_count
-            x = -0.5 + t
-            arch_z = shoulder_z + max(0.0, radius * radius - x * x) ** 0.5
-            underside_z = max(0.0, arch_z - underside_inset)
-            underside_front.append(bm.verts.new((x, y_front, underside_z)))
-            underside_back.append(bm.verts.new((x, y_back, underside_z)))
-            top_front.append(bm.verts.new((x, y_front, top_z)))
-            top_back.append(bm.verts.new((x, y_back, top_z)))
+            x = -inner_half + (inner_half * 2.0 * t)
+            arch_z = inner_shoulder + max(0.0, inner_radius * inner_radius - x * x) ** 0.5
+            inner_z = max(0.0, arch_z - inner_inset)
+            inner_front.append(bm.verts.new((x, y_front, inner_z)))
+            inner_back.append(bm.verts.new((x, y_back, inner_z)))
+            outer_front.append(bm.verts.new((x, y_front, outer_top)))
+            outer_back.append(bm.verts.new((x, y_back, outer_top)))
 
+        # Curved top masonry between the arched void and the outer top.
         for step in range(step_count):
             faces = (
-                (underside_back[step], underside_back[step + 1], underside_front[step + 1], underside_front[step]),
-                (top_front[step], top_front[step + 1], top_back[step + 1], top_back[step]),
-                (underside_front[step], underside_front[step + 1], top_front[step + 1], top_front[step]),
-                (top_back[step], top_back[step + 1], underside_back[step + 1], underside_back[step]),
+                (inner_back[step], inner_back[step + 1], inner_front[step + 1], inner_front[step]),
+                (outer_front[step], outer_front[step + 1], outer_back[step + 1], outer_back[step]),
+                (inner_front[step], inner_front[step + 1], outer_front[step + 1], outer_front[step]),
+                (outer_back[step], outer_back[step + 1], inner_back[step + 1], inner_back[step]),
             )
             for face in faces:
                 try:
@@ -940,8 +971,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                     pass
 
         for face in (
-            (underside_front[0], top_front[0], top_back[0], underside_back[0]),
-            (underside_back[-1], top_back[-1], top_front[-1], underside_front[-1]),
+            (inner_front[0], outer_front[0], outer_back[0], inner_back[0]),
+            (inner_back[-1], outer_back[-1], outer_front[-1], inner_front[-1]),
         ):
             try:
                 bm.faces.new(face)
