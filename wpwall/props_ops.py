@@ -511,7 +511,7 @@ class WPWALL_OT_build_wall(Operator):
 
     def execute(self, context):
         build_wall_mesh(context.scene, context)
-        self.report({'INFO'}, "Wall rebuilt")
+        self.report({'INFO'}, f"Wall rebuilt ({BUILD_MARKER})")
         return {'FINISHED'}
 
 
@@ -532,5 +532,4 @@ class WPWALL_OT_clear_all(Operator):
         scene.wp_wall_active_rig = None
         self.report({'INFO'}, "Cleared wall setup")
         return {'FINISHED'}
-
 

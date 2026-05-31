@@ -15,6 +15,7 @@ TOWER_INSTANCE_TAG = "wp_wall_tower_instance"
 OPENING_TAG = "wp_wall_opening"
 GATE_TAG = "wp_wall_gate"
 GATE_INSTANCE_TAG = "wp_wall_gate_instance"
+BUILD_MARKER = "2026-05-31 tunnel-box-debug"
 
 
 def settings(scene):

@@ -34,6 +34,7 @@ def draw_main_panel(layout, context):
     nav.operator("wpwall.select_next_waypoint", icon='TRIA_RIGHT', text="Next WP")
 
     status = layout.box()
+    status.label(text=f"Code: {BUILD_MARKER}")
     status.label(text=f"Active Wall: {rig.name if object_is_valid(rig) else 'None'}")
     if object_is_valid(rig):
         status.label(text=f"Waypoints: {len(sorted_waypoints(context.scene, rig))}")
@@ -154,5 +155,4 @@ class WPWALL_PT_scene_panel(Panel):
 
     def draw(self, context):
         draw_panel_safe(self.layout, context)
-
 
