@@ -345,10 +345,10 @@ def build_wall_mesh(scene, context=None):
     bind_gates_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     ensure_opening_boolean(scene, ctx, wall_obj, rig)
 
-    use_wall_source = object_is_valid(s.wall_source)
+    created_wall_instances = rebuild_wall_instances(scene, ctx, rig, wall_obj, points if len(points) >= 2 else [])
+    use_wall_source = object_is_valid(s.wall_source) and created_wall_instances > 0
     wall_obj.hide_viewport = use_wall_source
     wall_obj.hide_render = use_wall_source
-    rebuild_wall_instances(scene, ctx, rig, wall_obj, points if len(points) >= 2 else [])
 
     tower_points = []
     if raw_waypoints:
