@@ -300,6 +300,19 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
     floor_overcut = 0.05
     inv = wall_obj.matrix_world.inverted_safe()
 
+    def gate_float(obj, attr_name, fallback):
+        if object_is_valid(obj) and hasattr(obj, attr_name):
+            try:
+                return max(0.05, float(getattr(obj, attr_name)))
+            except Exception:
+                pass
+        if object_is_valid(obj) and attr_name in obj:
+            try:
+                return max(0.05, float(obj[attr_name]))
+            except Exception:
+                pass
+        return fallback
+
     for gate in sorted_gates(scene, rig):
         if not object_is_valid(gate):
             continue
@@ -313,13 +326,13 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
             tangent = Vector((1.0, 0.0, 0.0))
         gate_base_style = get_gate_base_style(gate, s.gate_base_style)
         gate_cut_depth = fortified_depth if gate_base_style == 'FORTIFIED' else cut_depth
-        cut_height = max(0.05, min(get_gate_height(gate, s.gate_height), s.wall_height))
+        cut_height = max(0.05, min(gate_float(gate, "wp_wall_gate_height", s.gate_height), s.wall_height))
         angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
         local_matrix = (
             Matrix.Translation(Vector((snapped.x, snapped.y, -floor_overcut)))
             @ Matrix.Rotation(angle, 4, 'Z')
             @ Matrix.Diagonal((
-                max(0.05, get_gate_length(gate, s.gate_length)),
+                max(0.05, gate_float(gate, "wp_wall_gate_length", s.gate_length)),
                 gate_cut_depth,
                 cut_height + floor_overcut,
                 1.0,
