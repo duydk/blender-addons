@@ -883,11 +883,90 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         ceil_obj.matrix_world = gate_obj.matrix_world @ local_roof
         parent_keep_transform(ceil_obj, wall_obj)
 
+    def create_gate_arch_runner_instance(gate_obj, idx, steps=12):
+        if not object_is_valid(gate_obj):
+            return
+        mesh = bpy.data.meshes.new(f"GATE_ARCH_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+
+        step_count = max(6, int(steps))
+        y_front = -0.5
+        y_back = 0.5
+        outer_r = 0.48
+        inner_r = 0.34
+        center_z = 0.5
+
+        outer_front = []
+        outer_back = []
+        inner_front = []
+        inner_back = []
+
+        for i in range(step_count + 1):
+            t = i / step_count
+            angle = t * pi
+            ox = cos(angle) * outer_r
+            oz = center_z + sin(angle) * outer_r
+            ix = cos(angle) * inner_r
+            iz = center_z + sin(angle) * inner_r
+            outer_front.append(bm.verts.new((ox, y_front, oz)))
+            outer_back.append(bm.verts.new((ox, y_back, oz)))
+            inner_front.append(bm.verts.new((ix, y_front, iz)))
+            inner_back.append(bm.verts.new((ix, y_back, iz)))
+
+        # Outer and inner arch strips along tunnel depth.
+        for i in range(step_count):
+            try:
+                bm.faces.new((outer_front[i], outer_front[i + 1], outer_back[i + 1], outer_back[i]))
+            except ValueError:
+                pass
+            try:
+                bm.faces.new((inner_back[i], inner_back[i + 1], inner_front[i + 1], inner_front[i]))
+            except ValueError:
+                pass
+
+        # Front/back caps between inner and outer arches.
+        for i in range(step_count):
+            try:
+                bm.faces.new((outer_front[i], outer_front[i + 1], inner_front[i + 1], inner_front[i]))
+            except ValueError:
+                pass
+            try:
+                bm.faces.new((inner_back[i], inner_back[i + 1], outer_back[i + 1], outer_back[i]))
+            except ValueError:
+                pass
+
+        # Close side edges (left/right ends of semicircle).
+        try:
+            bm.faces.new((outer_front[0], outer_back[0], inner_back[0], inner_front[0]))
+        except ValueError:
+            pass
+        try:
+            bm.faces.new((inner_front[-1], inner_back[-1], outer_back[-1], outer_front[-1]))
+        except ValueError:
+            pass
+
+        bm.normal_update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        arch_obj = bpy.data.objects.new(f"GATE_ARCH_{wall_id:03d}_{idx:03d}", mesh)
+        arch_obj[ADDON_TAG] = True
+        arch_obj[GATE_INSTANCE_TAG] = True
+        arch_obj[WALL_ID_TAG] = wall_id
+        arch_obj.hide_render = False
+        arch_obj.hide_set(False)
+        ensure_collection(context).objects.link(arch_obj)
+
+        arch_obj.matrix_world = gate_obj.matrix_world.copy()
+        parent_keep_transform(arch_obj, wall_obj)
+
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
             continue
         create_gate_facet_instance(gate, idx)
         create_gate_ceiling_instance(gate, idx)
+        create_gate_arch_runner_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 
