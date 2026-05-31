@@ -1752,7 +1752,6 @@ def draw_main_panel(layout, context):
             box.label(text=f"Gate: {active.name}")
             col = box.column(align=True)
             col.prop(active, "wp_wall_gate_style")
-            col.prop(s, "gate_style", text="Default Style")
             col.prop(s, "gate_length")
             col.prop(s, "gate_height")
             box.label(text="Drag it to update its position on the wall")
