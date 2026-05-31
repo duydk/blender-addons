@@ -31,6 +31,8 @@ class WPWallSettings(PropertyGroup):
     gate_height: FloatProperty(name="Gate Height", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_height(self, ctx))
     gate_style: EnumProperty(name="Gate Style", items=gate_style_items(), default='ARCH', update=lambda self, ctx: set_scene_gate_style(self, ctx))
     gate_base_style: EnumProperty(name="Gate Base", items=gate_base_items(), default='NONE', update=lambda self, ctx: set_scene_gate_base_style(self, ctx))
+    gate_tunnel_width: FloatProperty(name="Tunnel Width", default=1.0, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_tunnel_height: FloatProperty(name="Tunnel Height", default=0.94, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_thickness: FloatProperty(name="Tunnel Thickness", default=0.14, min=0.01, max=0.45, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_z_offset: FloatProperty(name="Tunnel Z Offset", default=0.03, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_base_width_mult: FloatProperty(name="Base Width x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))

@@ -78,6 +78,8 @@ def draw_main_panel(layout, context):
             col.prop(active, "wp_wall_gate_base_style")
             col.prop(s, "gate_length")
             col.prop(s, "gate_height")
+            col.prop(s, "gate_tunnel_width")
+            col.prop(s, "gate_tunnel_height")
             col.prop(s, "gate_tunnel_thickness")
             col.prop(s, "gate_tunnel_z_offset")
             if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
@@ -106,6 +108,8 @@ def draw_main_panel(layout, context):
             gcol = gate_box.column(align=True)
             gcol.prop(s, "gate_style")
             gcol.prop(s, "gate_base_style")
+            gcol.prop(s, "gate_tunnel_width")
+            gcol.prop(s, "gate_tunnel_height")
             gcol.prop(s, "gate_tunnel_thickness")
             gcol.prop(s, "gate_tunnel_z_offset")
             if s.gate_base_style == 'FORTIFIED':

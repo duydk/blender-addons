@@ -906,11 +906,14 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         step_count = max(8, int(steps))
         y_front = -0.51
         y_back = 0.51
-        outer_left = -0.5
-        outer_right = 0.5
-        outer_shoulder = 0.44
-        outer_radius = 0.5
-        tunnel_thickness = min(0.45, max(0.01, float(getattr(s, "gate_tunnel_thickness", 0.14))))
+        tunnel_width = max(0.1, float(getattr(s, "gate_tunnel_width", 1.0)))
+        tunnel_height = max(0.1, float(getattr(s, "gate_tunnel_height", 0.94)))
+        outer_radius = tunnel_width * 0.5
+        outer_arch_height = min(outer_radius, tunnel_height)
+        outer_left = -outer_radius
+        outer_right = outer_radius
+        outer_shoulder = max(0.0, tunnel_height - outer_arch_height)
+        tunnel_thickness = min(max(0.01, outer_radius - 0.05), max(0.01, float(getattr(s, "gate_tunnel_thickness", 0.14))))
         inner_half = max(0.05, outer_radius - tunnel_thickness)
         inner_shoulder = outer_shoulder
         inner_radius = inner_half
@@ -918,7 +921,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         z_lift = float(getattr(s, "gate_tunnel_z_offset", 0.03))
 
         def outer_arch_z(x):
-            return outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
+            arch = max(0.0, outer_radius * outer_radius - x * x) ** 0.5
+            return outer_shoulder + ((arch / outer_radius) * outer_arch_height)
 
         def add_curved_side_strip(x0, x1, strip_steps=4):
             front_bottom = []
