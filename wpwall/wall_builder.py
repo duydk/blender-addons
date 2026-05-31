@@ -965,6 +965,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             y0 = min(y_inner, y_outer)
             y1 = max(y_inner, y_outer)
             for step in range(stair_steps):
+                z0 = step * step_height
                 z1 = (step + 1) * step_height
                 is_top_step = step == stair_steps - 1
                 tread_len = step_len * (5.0 if is_top_step else 1.0)
@@ -972,8 +973,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 left_x0 = left_x1 - tread_len
                 right_x0 = gate_half + side_gap + ((stair_steps - step - 1) * step_len)
                 right_x1 = right_x0 + tread_len
-                add_box_faces(bm, left_x0, left_x1, y0, y1, 0.0, z1)
-                add_box_faces(bm, right_x0, right_x1, y0, y1, 0.0, z1)
+                add_box_faces(bm, left_x0, left_x1, y0, y1, z0, z1)
+                add_box_faces(bm, right_x0, right_x1, y0, y1, z0, z1)
 
         bm.normal_update()
         bm.to_mesh(mesh)
