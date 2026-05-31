@@ -36,7 +36,7 @@ class WPWallSettings(PropertyGroup):
     gate_tunnel_thickness: FloatProperty(name="Tunnel Thickness", default=0.14, min=0.01, max=0.45, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_z_offset: FloatProperty(name="Tunnel Z Offset", default=0.03, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stairs_enabled: BoolProperty(name="Gate Stairs", default=True, update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_stair_side: EnumProperty(name="Stair Side", items=gate_stair_side_items(), default='BOTH', update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_stair_side: EnumProperty(name="Stair Side", items=gate_stair_side_items(), default='INSIDE', update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_length: FloatProperty(name="Stair Length", default=1.6, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_height: FloatProperty(name="Stair Height", default=0.0, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_depth: FloatProperty(name="Stair Depth", default=0.6, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))

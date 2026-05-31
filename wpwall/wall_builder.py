@@ -473,9 +473,9 @@ def gate_base_items():
 
 def gate_stair_side_items():
     return [
-        ('BOTH', "Both Sides", "Place stairs on both sides of the gate"),
-        ('LEFT', "Left Side", "Place stairs only on the left side of the gate"),
-        ('RIGHT', "Right Side", "Place stairs only on the right side of the gate"),
+        ('INSIDE', "Inside", "Place stairs on the inside face of the wall"),
+        ('OUTSIDE', "Outside", "Place stairs on the outside face of the wall"),
+        ('BOTH', "Both", "Place stairs on both wall faces"),
     ]
 
 
@@ -946,25 +946,31 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
         custom_height = float(getattr(s, "gate_stair_height", 0.0))
         stair_height = max(0.05, custom_height if custom_height > 0.0 else s.wall_height)
-        stair_side = str(getattr(s, "gate_stair_side", 'BOTH'))
+        stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
         gate_half = gate_length * 0.5
         side_gap = stair_offset
         step_len = stair_length / stair_steps
         step_height = stair_height / stair_steps
-        y0 = (s.wall_thickness * 0.5) + 0.02
-        y1 = y0 + stair_depth
+        face_dirs = []
+        if stair_side in {'INSIDE', 'BOTH'}:
+            face_dirs.append(1.0)
+        if stair_side in {'OUTSIDE', 'BOTH'}:
+            face_dirs.append(-1.0)
 
         mesh = bpy.data.meshes.new(f"GATE_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
-        for step in range(stair_steps):
-            z1 = (step + 1) * step_height
-            left_x0 = -gate_half - side_gap - stair_length + (step * step_len)
-            left_x1 = left_x0 + step_len
-            right_x1 = gate_half + side_gap + stair_length - (step * step_len)
-            right_x0 = right_x1 - step_len
-            if stair_side in {'BOTH', 'LEFT'}:
+        for face_dir in face_dirs:
+            y_inner = face_dir * ((s.wall_thickness * 0.5) + 0.02)
+            y_outer = y_inner + (face_dir * stair_depth)
+            y0 = min(y_inner, y_outer)
+            y1 = max(y_inner, y_outer)
+            for step in range(stair_steps):
+                z1 = (step + 1) * step_height
+                left_x0 = -gate_half - side_gap - stair_length + (step * step_len)
+                left_x1 = left_x0 + step_len
+                right_x1 = gate_half + side_gap + stair_length - (step * step_len)
+                right_x0 = right_x1 - step_len
                 add_box_faces(bm, left_x0, left_x1, y0, y1, 0.0, z1)
-            if stair_side in {'BOTH', 'RIGHT'}:
                 add_box_faces(bm, right_x0, right_x1, y0, y1, 0.0, z1)
 
         bm.normal_update()
