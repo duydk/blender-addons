@@ -861,6 +861,12 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         instance.matrix_world = wall_obj.matrix_world @ placement_local
         parent_keep_transform(instance, wall_obj)
 
+        # Cut the fortified base using the same gate cutter shape so the opening passes through.
+        bool_mod = instance.modifiers.new(name="WP_GateBaseCut", type='BOOLEAN')
+        bool_mod.operation = 'DIFFERENCE'
+        bool_mod.solver = 'EXACT'
+        bool_mod.object = gate
+
 
 def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_points):
     clear_tower_instances(rig)
