@@ -896,19 +896,64 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
         return mat
 
-    def create_gate_tunnel_box_instance(gate_obj, idx):
+    def create_gate_tunnel_arch_instance(gate_obj, idx, steps=18):
         if not object_is_valid(gate_obj):
             return
 
-        tunnel_mesh = bpy.data.meshes.new(f"GATE_TUNNEL_BOX_{wall_id:03d}_{idx:03d}_mesh")
+        tunnel_mesh = bpy.data.meshes.new(f"GATE_TUNNEL_ARCH_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
+
+        step_count = max(8, int(steps))
+        y_front = -0.51
+        y_back = 0.51
+        radius = 0.5
+        shoulder_z = 0.5
+        top_z = 1.08
+        underside_inset = 0.06
+
+        underside_front = []
+        underside_back = []
+        top_front = []
+        top_back = []
+
+        for step in range(step_count + 1):
+            t = step / step_count
+            x = -0.5 + t
+            arch_z = shoulder_z + max(0.0, radius * radius - x * x) ** 0.5
+            underside_z = max(0.0, arch_z - underside_inset)
+            underside_front.append(bm.verts.new((x, y_front, underside_z)))
+            underside_back.append(bm.verts.new((x, y_back, underside_z)))
+            top_front.append(bm.verts.new((x, y_front, top_z)))
+            top_back.append(bm.verts.new((x, y_back, top_z)))
+
+        for step in range(step_count):
+            faces = (
+                (underside_back[step], underside_back[step + 1], underside_front[step + 1], underside_front[step]),
+                (top_front[step], top_front[step + 1], top_back[step + 1], top_back[step]),
+                (underside_front[step], underside_front[step + 1], top_front[step + 1], top_front[step]),
+                (top_back[step], top_back[step + 1], underside_back[step + 1], underside_back[step]),
+            )
+            for face in faces:
+                try:
+                    bm.faces.new(face)
+                except ValueError:
+                    pass
+
+        for face in (
+            (underside_front[0], top_front[0], top_back[0], underside_back[0]),
+            (underside_back[-1], top_back[-1], top_front[-1], underside_front[-1]),
+        ):
+            try:
+                bm.faces.new(face)
+            except ValueError:
+                pass
+
         bm.normal_update()
         bm.to_mesh(tunnel_mesh)
         bm.free()
         tunnel_mesh.update()
 
-        tunnel_obj = bpy.data.objects.new(f"GATE_TUNNEL_BOX_{wall_id:03d}_{idx:03d}", tunnel_mesh)
+        tunnel_obj = bpy.data.objects.new(f"GATE_TUNNEL_ARCH_{wall_id:03d}_{idx:03d}", tunnel_mesh)
         tunnel_obj[ADDON_TAG] = True
         tunnel_obj[GATE_INSTANCE_TAG] = True
         tunnel_obj[WALL_ID_TAG] = wall_id
@@ -921,18 +966,13 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         tunnel_obj.data.materials.append(gate_tunnel_material())
         ensure_collection(context).objects.link(tunnel_obj)
 
-        # Solid ceiling block inside the cutter's local tunnel volume.
-        local_box = (
-            Matrix.Translation(Vector((0.0, 0.0, 0.78)))
-            @ Matrix.Diagonal((0.82, 0.98, 0.24, 1.0))
-        )
-        tunnel_obj.matrix_world = gate_obj.matrix_world @ local_box
+        tunnel_obj.matrix_world = gate_obj.matrix_world.copy()
         parent_keep_transform(tunnel_obj, wall_obj)
 
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
             continue
-        create_gate_tunnel_box_instance(gate, idx)
+        create_gate_tunnel_arch_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 
