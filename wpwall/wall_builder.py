@@ -883,67 +883,58 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         ceil_obj.matrix_world = gate_obj.matrix_world @ local_roof
         parent_keep_transform(ceil_obj, wall_obj)
 
-    def create_gate_arch_runner_instance(gate_obj, idx, steps=12):
+    def create_gate_arch_runner_instance(gate_obj, idx, steps=16):
         if not object_is_valid(gate_obj):
             return
         mesh = bpy.data.meshes.new(f"GATE_ARCH_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
 
-        step_count = max(6, int(steps))
-        y_front = -0.5
-        y_back = 0.5
-        outer_r = 0.48
-        inner_r = 0.34
-        center_z = 0.5
+        step_count = max(8, int(steps))
+        y_front = -0.53
+        y_back = 0.53
+        radius = 0.5
+        shoulder_z = 0.5
+        top_z = 1.08
 
-        outer_front = []
-        outer_back = []
-        inner_front = []
-        inner_back = []
+        underside_front = []
+        underside_back = []
+        top_front = []
+        top_back = []
 
         for i in range(step_count + 1):
             t = i / step_count
-            angle = t * pi
-            ox = cos(angle) * outer_r
-            oz = center_z + sin(angle) * outer_r
-            ix = cos(angle) * inner_r
-            iz = center_z + sin(angle) * inner_r
-            outer_front.append(bm.verts.new((ox, y_front, oz)))
-            outer_back.append(bm.verts.new((ox, y_back, oz)))
-            inner_front.append(bm.verts.new((ix, y_front, iz)))
-            inner_back.append(bm.verts.new((ix, y_back, iz)))
+            x = -0.5 + t
+            z = shoulder_z + max(0.0, radius * radius - x * x) ** 0.5
+            underside_front.append(bm.verts.new((x, y_front, z)))
+            underside_back.append(bm.verts.new((x, y_back, z)))
+            top_front.append(bm.verts.new((x, y_front, top_z)))
+            top_back.append(bm.verts.new((x, y_back, top_z)))
 
-        # Outer and inner arch strips along tunnel depth.
         for i in range(step_count):
-            try:
-                bm.faces.new((outer_front[i], outer_front[i + 1], outer_back[i + 1], outer_back[i]))
-            except ValueError:
-                pass
-            try:
-                bm.faces.new((inner_back[i], inner_back[i + 1], inner_front[i + 1], inner_front[i]))
-            except ValueError:
-                pass
+            faces = (
+                # Curved visible underside, spanning back to front.
+                (underside_back[i], underside_back[i + 1], underside_front[i + 1], underside_front[i]),
+                # Flat top hidden inside the wall/base mass.
+                (top_front[i], top_front[i + 1], top_back[i + 1], top_back[i]),
+                # Front and back vertical thickness faces.
+                (underside_front[i], underside_front[i + 1], top_front[i + 1], top_front[i]),
+                (top_back[i], top_back[i + 1], underside_back[i + 1], underside_back[i]),
+            )
+            for face in faces:
+                try:
+                    bm.faces.new(face)
+                except ValueError:
+                    pass
 
-        # Front/back caps between inner and outer arches.
-        for i in range(step_count):
+        # Close the left and right ends of the vaulted slab.
+        for face in (
+            (underside_front[0], top_front[0], top_back[0], underside_back[0]),
+            (underside_back[-1], top_back[-1], top_front[-1], underside_front[-1]),
+        ):
             try:
-                bm.faces.new((outer_front[i], outer_front[i + 1], inner_front[i + 1], inner_front[i]))
+                bm.faces.new(face)
             except ValueError:
                 pass
-            try:
-                bm.faces.new((inner_back[i], inner_back[i + 1], outer_back[i + 1], outer_back[i]))
-            except ValueError:
-                pass
-
-        # Close side edges (left/right ends of semicircle).
-        try:
-            bm.faces.new((outer_front[0], outer_back[0], inner_back[0], inner_front[0]))
-        except ValueError:
-            pass
-        try:
-            bm.faces.new((inner_front[-1], inner_back[-1], outer_back[-1], outer_front[-1]))
-        except ValueError:
-            pass
 
         bm.normal_update()
         bm.to_mesh(mesh)
