@@ -517,6 +517,59 @@ def set_gate_base_style(obj, value):
     obj["wp_wall_gate_base_style"] = value
 
 
+def get_opening_length(obj, default=2.0):
+    if not object_is_valid(obj):
+        return default
+    if hasattr(obj, "wp_wall_opening_length"):
+        try:
+            return max(0.05, float(obj.wp_wall_opening_length))
+        except Exception:
+            pass
+    if hasattr(obj, "wp_wall_opening_width"):
+        try:
+            return max(0.05, float(obj.wp_wall_opening_width))
+        except Exception:
+            pass
+    if "wp_wall_opening_length" in obj:
+        try:
+            return max(0.05, float(obj["wp_wall_opening_length"]))
+        except Exception:
+            pass
+    return default
+
+
+def get_gate_length(obj, default=2.0):
+    if not object_is_valid(obj):
+        return default
+    if hasattr(obj, "wp_wall_gate_length"):
+        try:
+            return max(0.05, float(obj.wp_wall_gate_length))
+        except Exception:
+            pass
+    if "wp_wall_gate_length" in obj:
+        try:
+            return max(0.05, float(obj["wp_wall_gate_length"]))
+        except Exception:
+            pass
+    return default
+
+
+def get_gate_height(obj, default=2.0):
+    if not object_is_valid(obj):
+        return default
+    if hasattr(obj, "wp_wall_gate_height"):
+        try:
+            return max(0.05, float(obj.wp_wall_gate_height))
+        except Exception:
+            pass
+    if "wp_wall_gate_height" in obj:
+        try:
+            return max(0.05, float(obj["wp_wall_gate_height"]))
+        except Exception:
+            pass
+    return default
+
+
 def rebuild_gate_cutter_mesh(obj, arc_steps=12):
     if not object_is_valid(obj) or obj.type != 'MESH' or obj.data is None:
         return
