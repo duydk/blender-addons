@@ -31,7 +31,7 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
         seg_len = seg.length
         if seg_len <= 1e-8:
             continue
-        tangent = _engine_common._safe_dir_2d(a, b)
+        tangent = _safe_dir_2d(a, b)
         if tangent is None:
             continue
         repeat_count = max(1, int((seg_len / max(base_len * s.wall_scale, 1e-4)) + 0.9999))
@@ -65,8 +65,8 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
                     1.0,
                 ))
             )
-            cand_min, cand_max = _engine_common._aabb_from_points(_engine_common._bbox_world_corners(source, placement))
-            if any(_engine_common._aabb_overlap(cand_min, cand_max, box_min, box_max) for box_min, box_max in opening_boxes):
+            cand_min, cand_max = _aabb_from_points(_bbox_world_corners(source, placement))
+            if any(_aabb_overlap(cand_min, cand_max, box_min, box_max) for box_min, box_max in opening_boxes):
                 bpy.data.objects.remove(instance, do_unlink=True)
                 continue
             instance.matrix_world = placement
