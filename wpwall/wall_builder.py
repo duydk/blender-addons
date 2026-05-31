@@ -959,22 +959,43 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
 
         mesh = bpy.data.meshes.new(f"GATE_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
+
+        def add_stair_run(inner_x, x_dir, y0, y1):
+            landing_len = step_len * 5.0
+            total_len = landing_len + (max(0, stair_steps - 1) * step_len)
+            profile = [(total_len, 0.0), (0.0, 0.0), (0.0, stair_height), (landing_len, stair_height)]
+            for level in range(stair_steps - 1, 0, -1):
+                z = level * step_height
+                d0 = landing_len + ((stair_steps - 1 - level) * step_len)
+                d1 = d0 + step_len
+                profile.append((d0, z))
+                profile.append((d1, z))
+            profile.append((total_len, 0.0))
+
+            front = [bm.verts.new((inner_x + (d * x_dir), y0, z)) for d, z in profile]
+            back = [bm.verts.new((inner_x + (d * x_dir), y1, z)) for d, z in profile]
+            try:
+                bm.faces.new(front)
+            except ValueError:
+                pass
+            try:
+                bm.faces.new(tuple(reversed(back)))
+            except ValueError:
+                pass
+            for i in range(len(profile)):
+                j = (i + 1) % len(profile)
+                try:
+                    bm.faces.new((front[i], front[j], back[j], back[i]))
+                except ValueError:
+                    pass
+
         for face_dir in face_dirs:
             y_inner = face_dir * ((s.wall_thickness * 0.5) + 0.02)
             y_outer = y_inner + (face_dir * stair_depth)
             y0 = min(y_inner, y_outer)
             y1 = max(y_inner, y_outer)
-            for step in range(stair_steps):
-                z0 = step * step_height
-                z1 = (step + 1) * step_height
-                is_top_step = step == stair_steps - 1
-                tread_len = step_len * (5.0 if is_top_step else 1.0)
-                left_x1 = -gate_half - side_gap - ((stair_steps - step - 1) * step_len)
-                left_x0 = left_x1 - tread_len
-                right_x0 = gate_half + side_gap + ((stair_steps - step - 1) * step_len)
-                right_x1 = right_x0 + tread_len
-                add_box_faces(bm, left_x0, left_x1, y0, y1, z0, z1)
-                add_box_faces(bm, right_x0, right_x1, y0, y1, z0, z1)
+            add_stair_run(-gate_half - side_gap, -1.0, y0, y1)
+            add_stair_run(gate_half + side_gap, 1.0, y0, y1)
 
         bm.normal_update()
         bm.to_mesh(mesh)
