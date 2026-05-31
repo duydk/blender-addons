@@ -856,10 +856,38 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         solid.offset = 0.0
         solid.use_even_offset = True
 
+    def create_gate_ceiling_instance(gate_obj, idx):
+        if not object_is_valid(gate_obj):
+            return
+        mesh = bpy.data.meshes.new(f"GATE_CEIL_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        ceil_obj = bpy.data.objects.new(f"GATE_CEIL_{wall_id:03d}_{idx:03d}", mesh)
+        ceil_obj[ADDON_TAG] = True
+        ceil_obj[GATE_INSTANCE_TAG] = True
+        ceil_obj[WALL_ID_TAG] = wall_id
+        ceil_obj.hide_render = False
+        ceil_obj.hide_set(False)
+        ensure_collection(context).objects.link(ceil_obj)
+
+        # Build a solid "roof" inside the gate tunnel in cutter-local space.
+        # Unit cutter profile has top around z=1.0, so z~0.78 gives a robust ceiling.
+        local_roof = (
+            Matrix.Translation(Vector((0.0, 0.0, 0.78)))
+            @ Matrix.Diagonal((0.90, 1.02, 0.18, 1.0))
+        )
+        ceil_obj.matrix_world = gate_obj.matrix_world @ local_roof
+        parent_keep_transform(ceil_obj, wall_obj)
+
     for idx, gate in enumerate(gates):
         if not object_is_valid(gate):
             continue
         create_gate_facet_instance(gate, idx)
+        create_gate_ceiling_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 
