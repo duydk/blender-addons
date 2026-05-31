@@ -896,6 +896,88 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
         return mat
 
+    def gate_stair_material():
+        mat = bpy.data.materials.get("WP_Gate_Stairs")
+        if mat is None:
+            mat = bpy.data.materials.new("WP_Gate_Stairs")
+        mat.diffuse_color = (0.62, 0.62, 0.60, 1.0)
+        return mat
+
+    def add_box_faces(bm, x0, x1, y0, y1, z0, z1):
+        verts = [
+            bm.verts.new((x0, y0, z0)),
+            bm.verts.new((x1, y0, z0)),
+            bm.verts.new((x1, y1, z0)),
+            bm.verts.new((x0, y1, z0)),
+            bm.verts.new((x0, y0, z1)),
+            bm.verts.new((x1, y0, z1)),
+            bm.verts.new((x1, y1, z1)),
+            bm.verts.new((x0, y1, z1)),
+        ]
+        for face in (
+            (verts[0], verts[1], verts[2], verts[3]),
+            (verts[4], verts[7], verts[6], verts[5]),
+            (verts[0], verts[4], verts[5], verts[1]),
+            (verts[1], verts[5], verts[6], verts[2]),
+            (verts[2], verts[6], verts[7], verts[3]),
+            (verts[3], verts[7], verts[4], verts[0]),
+        ):
+            try:
+                bm.faces.new(face)
+            except ValueError:
+                pass
+
+    def create_gate_stairs_instance(gate_obj, idx):
+        if not object_is_valid(gate_obj) or not bool(getattr(s, "gate_stairs_enabled", True)):
+            return
+
+        gate_length = max(0.05, get_gate_length(gate_obj, s.gate_length))
+        stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
+        stair_depth = max(0.05, float(getattr(s, "gate_stair_depth", 0.6)))
+        stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+        stair_height = max(0.05, s.wall_height)
+        gate_half = gate_length * 0.5
+        side_gap = max(0.05, s.wall_thickness * 0.25)
+        step_len = stair_length / stair_steps
+        step_height = stair_height / stair_steps
+        y0 = (s.wall_thickness * 0.5) + 0.02
+        y1 = y0 + stair_depth
+
+        mesh = bpy.data.meshes.new(f"GATE_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+        for step in range(stair_steps):
+            z1 = (step + 1) * step_height
+            left_x0 = -gate_half - side_gap - stair_length + (step * step_len)
+            left_x1 = left_x0 + step_len
+            right_x1 = gate_half + side_gap + stair_length - (step * step_len)
+            right_x0 = right_x1 - step_len
+            add_box_faces(bm, left_x0, left_x1, y0, y1, 0.0, z1)
+            add_box_faces(bm, right_x0, right_x1, y0, y1, 0.0, z1)
+
+        bm.normal_update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        stair_obj = bpy.data.objects.new(f"GATE_STAIRS_{wall_id:03d}_{idx:03d}", mesh)
+        stair_obj[ADDON_TAG] = True
+        stair_obj[GATE_INSTANCE_TAG] = True
+        stair_obj[WALL_ID_TAG] = wall_id
+        stair_obj.hide_render = False
+        stair_obj.hide_set(False)
+        stair_obj.data.materials.append(gate_stair_material())
+        ensure_collection(context).objects.link(stair_obj)
+
+        local_gate_m = inv @ gate_obj.matrix_world
+        local_gate_pos = local_gate_m.translation.copy()
+        local_yaw = local_gate_m.to_euler('XYZ').z
+        placement_local = (
+            Matrix.Translation(Vector((local_gate_pos.x, local_gate_pos.y, 0.0)))
+            @ Matrix.Rotation(local_yaw, 4, 'Z')
+        )
+        stair_obj.matrix_world = wall_obj.matrix_world @ placement_local
+        parent_keep_transform(stair_obj, wall_obj)
+
     def create_gate_tunnel_arch_instance(gate_obj, idx, steps=18):
         if not object_is_valid(gate_obj):
             return
@@ -1027,6 +1109,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         if not object_is_valid(gate):
             continue
         create_gate_tunnel_arch_instance(gate, idx)
+        create_gate_stairs_instance(gate, idx)
         if get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
 

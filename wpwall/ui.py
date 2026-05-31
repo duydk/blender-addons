@@ -82,6 +82,12 @@ def draw_main_panel(layout, context):
             col.prop(s, "gate_tunnel_height")
             col.prop(s, "gate_tunnel_thickness")
             col.prop(s, "gate_tunnel_z_offset")
+            stair_col = box.column(align=True)
+            stair_col.prop(s, "gate_stairs_enabled")
+            if s.gate_stairs_enabled:
+                stair_col.prop(s, "gate_stair_length")
+                stair_col.prop(s, "gate_stair_depth")
+                stair_col.prop(s, "gate_stair_steps")
             if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
                 base_col = box.column(align=True)
                 base_col.label(text="Fortified Base")
@@ -112,6 +118,11 @@ def draw_main_panel(layout, context):
             gcol.prop(s, "gate_tunnel_height")
             gcol.prop(s, "gate_tunnel_thickness")
             gcol.prop(s, "gate_tunnel_z_offset")
+            gcol.prop(s, "gate_stairs_enabled")
+            if s.gate_stairs_enabled:
+                gcol.prop(s, "gate_stair_length")
+                gcol.prop(s, "gate_stair_depth")
+                gcol.prop(s, "gate_stair_steps")
             if s.gate_base_style == 'FORTIFIED':
                 gcol.prop(s, "gate_base_width_mult")
                 gcol.prop(s, "gate_base_thickness_mult")
