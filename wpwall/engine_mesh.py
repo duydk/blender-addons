@@ -346,7 +346,7 @@ def build_wall_mesh(scene, context=None):
     ensure_opening_boolean(scene, ctx, wall_obj, rig)
 
     created_wall_instances = rebuild_wall_instances(scene, ctx, rig, wall_obj, points if len(points) >= 2 else [])
-    use_wall_source = object_is_valid(s.wall_source) and s.wall_source.type == 'MESH' and created_wall_instances > 0
+    use_wall_source = object_is_valid(s.wall_source) and created_wall_instances > 0
     wall_obj.hide_viewport = use_wall_source
     wall_obj.hide_render = use_wall_source
 
