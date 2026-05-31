@@ -471,6 +471,14 @@ def gate_base_items():
     ]
 
 
+def gate_stair_side_items():
+    return [
+        ('BOTH', "Both Sides", "Place stairs on both sides of the gate"),
+        ('LEFT', "Left Side", "Place stairs only on the left side of the gate"),
+        ('RIGHT', "Right Side", "Place stairs only on the right side of the gate"),
+    ]
+
+
 def get_gate_style(obj, default='ARCH'):
     if not object_is_valid(obj):
         return default
@@ -934,10 +942,13 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         gate_length = max(0.05, get_gate_length(gate_obj, s.gate_length))
         stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
         stair_depth = max(0.05, float(getattr(s, "gate_stair_depth", 0.6)))
+        stair_offset = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
         stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
-        stair_height = max(0.05, s.wall_height)
+        custom_height = float(getattr(s, "gate_stair_height", 0.0))
+        stair_height = max(0.05, custom_height if custom_height > 0.0 else s.wall_height)
+        stair_side = str(getattr(s, "gate_stair_side", 'BOTH'))
         gate_half = gate_length * 0.5
-        side_gap = max(0.05, s.wall_thickness * 0.25)
+        side_gap = stair_offset
         step_len = stair_length / stair_steps
         step_height = stair_height / stair_steps
         y0 = (s.wall_thickness * 0.5) + 0.02
@@ -951,8 +962,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             left_x1 = left_x0 + step_len
             right_x1 = gate_half + side_gap + stair_length - (step * step_len)
             right_x0 = right_x1 - step_len
-            add_box_faces(bm, left_x0, left_x1, y0, y1, 0.0, z1)
-            add_box_faces(bm, right_x0, right_x1, y0, y1, 0.0, z1)
+            if stair_side in {'BOTH', 'LEFT'}:
+                add_box_faces(bm, left_x0, left_x1, y0, y1, 0.0, z1)
+            if stair_side in {'BOTH', 'RIGHT'}:
+                add_box_faces(bm, right_x0, right_x1, y0, y1, 0.0, z1)
 
         bm.normal_update()
         bm.to_mesh(mesh)
