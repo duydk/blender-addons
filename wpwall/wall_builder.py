@@ -908,7 +908,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         y_back = 0.51
         outer_left = -0.5
         outer_right = 0.5
-        outer_top = 1.0
+        outer_shoulder = 0.48
+        outer_radius = 0.5
         inner_half = 0.36
         inner_shoulder = 0.44
         inner_radius = 0.36
@@ -939,8 +940,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                     pass
 
         # Vertical side jambs around the arched void.
-        add_prism(outer_left, -inner_half, 0.0, outer_top)
-        add_prism(inner_half, outer_right, 0.0, outer_top)
+        add_prism(outer_left, -inner_half, 0.0, outer_shoulder)
+        add_prism(inner_half, outer_right, 0.0, outer_shoulder)
 
         inner_front = []
         inner_back = []
@@ -951,12 +952,13 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             x = -inner_half + (inner_half * 2.0 * t)
             arch_z = inner_shoulder + max(0.0, inner_radius * inner_radius - x * x) ** 0.5
             inner_z = max(0.0, arch_z - inner_inset)
+            outer_z = outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
             inner_front.append(bm.verts.new((x, y_front, inner_z)))
             inner_back.append(bm.verts.new((x, y_back, inner_z)))
-            outer_front.append(bm.verts.new((x, y_front, outer_top)))
-            outer_back.append(bm.verts.new((x, y_back, outer_top)))
+            outer_front.append(bm.verts.new((x, y_front, outer_z)))
+            outer_back.append(bm.verts.new((x, y_back, outer_z)))
 
-        # Curved top masonry between the arched void and the outer top.
+        # Curved top masonry between the inner opening arch and outer arch.
         for step in range(step_count):
             faces = (
                 (inner_back[step], inner_back[step + 1], inner_front[step + 1], inner_front[step]),
