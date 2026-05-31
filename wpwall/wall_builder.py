@@ -913,7 +913,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         inner_half = 0.36
         inner_shoulder = outer_shoulder
         inner_radius = 0.36
-        inner_inset = 0.03
+        inner_inset = 0.0
 
         def outer_arch_z(x):
             return outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
