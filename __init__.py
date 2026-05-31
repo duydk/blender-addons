@@ -299,7 +299,13 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
         return
     closed = bool(s.closed_loop and len(local_points) > 2)
     cut_depth = max(0.05, s.wall_thickness + 0.05)
-    fortified_depth = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult) + 0.05)
+    fortified_depth = max(
+        0.05,
+        s.wall_thickness
+        * max(0.01, s.gate_base_thickness_mult)
+        * max(0.01, s.gate_base_bottom_thickness_mult)
+        + 0.05,
+    )
     floor_overcut = 0.05
     inv = wall_obj.matrix_world.inverted_safe()
 
