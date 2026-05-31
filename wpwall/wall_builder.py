@@ -910,11 +910,12 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         outer_right = 0.5
         outer_shoulder = 0.44
         outer_radius = 0.5
-        inner_half = 0.36
+        tunnel_thickness = min(0.45, max(0.01, float(getattr(s, "gate_tunnel_thickness", 0.14))))
+        inner_half = max(0.05, outer_radius - tunnel_thickness)
         inner_shoulder = outer_shoulder
-        inner_radius = 0.36
+        inner_radius = inner_half
         inner_inset = 0.0
-        z_lift = 0.03
+        z_lift = float(getattr(s, "gate_tunnel_z_offset", 0.03))
 
         def outer_arch_z(x):
             return outer_shoulder + max(0.0, outer_radius * outer_radius - x * x) ** 0.5
