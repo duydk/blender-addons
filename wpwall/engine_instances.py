@@ -11,9 +11,8 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
     clear_wall_instances(rig)
     s = settings(scene)
     source = s.wall_source
-    created_count = 0
     if not object_is_valid(source) or len(local_points) < 2:
-        return created_count
+        return
 
     wall_id = wall_id_from_obj(rig)
     _src_loc, src_rot, src_scale = source.matrix_world.decompose()
@@ -71,8 +70,6 @@ def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
                 continue
             instance.matrix_world = placement
             parent_keep_transform(instance, wall_obj)
-            created_count += 1
-    return created_count
 
 
 def rebuild_gate_instances(scene, context, rig, wall_obj):
@@ -271,3 +268,4 @@ def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_
         )
         instance.matrix_world = placement
         parent_keep_transform(instance, wall_obj)
+
