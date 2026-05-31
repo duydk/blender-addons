@@ -914,6 +914,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         inner_shoulder = outer_shoulder
         inner_radius = 0.36
         inner_inset = 0.03
+        outer_edge_height = outer_shoulder + max(0.0, outer_radius * outer_radius - inner_half * inner_half) ** 0.5
 
         def add_prism(x0, x1, z0, z1):
             verts = [
@@ -939,9 +940,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 except ValueError:
                     pass
 
-        # Vertical side jambs around the arched void.
-        add_prism(outer_left, -inner_half, 0.0, outer_shoulder)
-        add_prism(inner_half, outer_right, 0.0, outer_shoulder)
+        # Vertical side jambs around the arched void. Match the outer arch edge
+        # height so the visible outside silhouette has no stepped side cuts.
+        add_prism(outer_left, -inner_half, 0.0, outer_edge_height)
+        add_prism(inner_half, outer_right, 0.0, outer_edge_height)
 
         inner_front = []
         inner_back = []
