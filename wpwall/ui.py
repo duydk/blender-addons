@@ -84,6 +84,12 @@ def draw_main_panel(layout, context):
                 stair_col.prop(s, "gate_stair_depth")
                 stair_col.prop(s, "gate_stair_offset")
                 stair_col.prop(s, "gate_stair_steps")
+            wall_stair_col = box.column(align=True)
+            wall_stair_col.prop(s, "gate_wall_stairs_enabled")
+            if s.gate_wall_stairs_enabled:
+                wall_stair_col.prop(s, "gate_wall_stair_length")
+                wall_stair_col.prop(s, "gate_wall_stair_depth")
+                wall_stair_col.prop(s, "gate_wall_stair_steps")
             if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
                 base_col = box.column(align=True)
                 base_col.label(text="Fortified Base")
@@ -107,6 +113,12 @@ def draw_main_panel(layout, context):
                 base_col.prop(s, "tower_base_height_mult")
                 base_col.prop(s, "tower_base_bottom_width_mult")
                 base_col.prop(s, "tower_base_bottom_thickness_mult")
+                stair_col = box.column(align=True)
+                stair_col.prop(s, "tower_wall_stairs_enabled")
+                if s.tower_wall_stairs_enabled:
+                    stair_col.prop(s, "tower_wall_stair_length")
+                    stair_col.prop(s, "tower_wall_stair_depth")
+                    stair_col.prop(s, "tower_wall_stair_steps")
             box.label(text="Drag it to update its position on the wall")
         elif active_is_wall or object_is_valid(rig):
             box = layout.box()
@@ -137,6 +149,11 @@ def draw_main_panel(layout, context):
                 gcol.prop(s, "gate_stair_depth")
                 gcol.prop(s, "gate_stair_offset")
                 gcol.prop(s, "gate_stair_steps")
+            gcol.prop(s, "gate_wall_stairs_enabled")
+            if s.gate_wall_stairs_enabled:
+                gcol.prop(s, "gate_wall_stair_length")
+                gcol.prop(s, "gate_wall_stair_depth")
+                gcol.prop(s, "gate_wall_stair_steps")
             if s.gate_base_style == 'FORTIFIED':
                 gcol.prop(s, "gate_base_width_mult")
                 gcol.prop(s, "gate_base_thickness_mult")
@@ -154,6 +171,11 @@ def draw_main_panel(layout, context):
                 tcol.prop(s, "tower_base_height_mult")
                 tcol.prop(s, "tower_base_bottom_width_mult")
                 tcol.prop(s, "tower_base_bottom_thickness_mult")
+                tcol.prop(s, "tower_wall_stairs_enabled")
+                if s.tower_wall_stairs_enabled:
+                    tcol.prop(s, "tower_wall_stair_length")
+                    tcol.prop(s, "tower_wall_stair_depth")
+                    tcol.prop(s, "tower_wall_stair_steps")
         else:
             hint = layout.box()
             hint.label(text="Select a wall part to edit its settings")

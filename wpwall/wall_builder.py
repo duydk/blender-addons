@@ -957,14 +957,14 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 pass
 
     def create_top_access_stairs(name_prefix, idx, base_half_width, base_height, matrix_world, instance_tag):
-        if base_height <= s.wall_height + 1e-6:
+        if not bool(getattr(s, "gate_wall_stairs_enabled", True)) or base_height <= s.wall_height + 1e-6:
             return
-        stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+        stair_steps = max(1, int(getattr(s, "gate_wall_stair_steps", 7)))
         rise = base_height - s.wall_height
-        step_len = max(0.05, max(0.1, float(getattr(s, "gate_stair_length", 1.6))) / stair_steps)
+        step_len = max(0.05, max(0.1, float(getattr(s, "gate_wall_stair_length", 1.6))) / stair_steps)
         access_len = step_len * stair_steps
         step_height = rise / stair_steps
-        half_depth = max(0.025, min(s.wall_thickness * 0.5, base_half_width))
+        half_depth = max(0.025, float(getattr(s, "gate_wall_stair_depth", 0.6)) * 0.5)
 
         mesh = bpy.data.meshes.new(f"{name_prefix}_TOP_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
@@ -1422,14 +1422,14 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         return mat
 
     def create_top_access_stairs(idx, base_half_width, base_height, matrix_world):
-        if base_height <= s.wall_height + 1e-6:
+        if not bool(getattr(s, "tower_wall_stairs_enabled", True)) or base_height <= s.wall_height + 1e-6:
             return
-        stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+        stair_steps = max(1, int(getattr(s, "tower_wall_stair_steps", 7)))
         rise = base_height - s.wall_height
-        step_len = max(0.05, max(0.1, float(getattr(s, "gate_stair_length", 1.6))) / stair_steps)
+        step_len = max(0.05, max(0.1, float(getattr(s, "tower_wall_stair_length", 1.6))) / stair_steps)
         access_len = step_len * stair_steps
         step_height = rise / stair_steps
-        half_depth = max(0.025, min(s.wall_thickness * 0.5, base_half_width))
+        half_depth = max(0.025, float(getattr(s, "tower_wall_stair_depth", 0.6)) * 0.5)
 
         mesh = bpy.data.meshes.new(f"TOWER_TOP_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
         bm = bmesh.new()
