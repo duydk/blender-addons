@@ -45,6 +45,18 @@ def draw_main_panel(layout, context):
         status.label(text=f"Gates: {len(sorted_gates(context.scene, rig))}")
         status.label(text=f"Towers: {len(sorted_towers(context.scene, rig))}")
 
+    mat_box = layout.box()
+    mat_box.label(text="Materials")
+    mcol = mat_box.column(align=True)
+    mcol.prop(s, "wall_material")
+    mcol.prop(s, "wall_top_material")
+    mcol.prop(s, "gate_material")
+    mcol.prop(s, "gate_top_material")
+    mcol.prop(s, "tower_material")
+    mcol.prop(s, "tower_top_material")
+    mcol.prop(s, "stair_material")
+    mcol.prop(s, "stair_top_material")
+
     layout.separator()
     try:
         if active_is_waypoint:

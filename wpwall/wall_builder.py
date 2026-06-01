@@ -17,9 +17,53 @@ GATE_TAG = "wp_wall_gate"
 TOWER_TAG = "wp_wall_tower"
 GATE_INSTANCE_TAG = "wp_wall_gate_instance"
 
+DEFAULT_MATERIALS = {
+    "wall": ("WP_Wall", (0.62, 0.62, 0.60, 1.0)),
+    "wall_top": ("WP_Wall_Top", (0.70, 0.70, 0.68, 1.0)),
+    "gate": ("WP_Gate", (0.50, 0.50, 0.48, 1.0)),
+    "gate_top": ("WP_Gate_Top", (0.58, 0.58, 0.56, 1.0)),
+    "tower": ("WP_Tower", (0.55, 0.55, 0.53, 1.0)),
+    "tower_top": ("WP_Tower_Top", (0.64, 0.64, 0.62, 1.0)),
+    "stair": ("WP_Stair", (0.62, 0.62, 0.60, 1.0)),
+    "stair_top": ("WP_Stair_Top", (0.70, 0.70, 0.68, 1.0)),
+}
+
 
 def settings(scene):
     return scene.wp_wall_settings
+
+
+def default_material(key):
+    name, color = DEFAULT_MATERIALS[key]
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name)
+        mat.diffuse_color = color
+    return mat
+
+
+def setting_material(s, attr_name, fallback_key):
+    mat = getattr(s, attr_name, None)
+    return mat if mat is not None else default_material(fallback_key)
+
+
+def material_pair(s, base_attr, top_attr, base_key, top_key):
+    return (
+        setting_material(s, base_attr, base_key),
+        setting_material(s, top_attr, top_key),
+    )
+
+
+def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5):
+    bm.normal_update()
+    mesh.materials.clear()
+    mesh.materials.append(base_mat)
+    mesh.materials.append(top_mat)
+    for face in bm.faces:
+        zs = [vert.co.z for vert in face.verts]
+        elevated_flat = max(zs) > 1e-5 and (max(zs) - min(zs)) <= 1e-5
+        upward = face.normal.z > top_threshold and face.calc_center_median().z > 1e-5
+        face.material_index = 1 if elevated_flat or upward else 0
 
 
 def object_is_valid(obj):
@@ -918,20 +962,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
     if not gates:
         return
 
-    def gate_tunnel_material():
-        mat = bpy.data.materials.get("WP_Gate_Interior")
-        if mat is None:
-            mat = bpy.data.materials.new("WP_Gate_Interior")
-        mat.diffuse_color = (0.42, 0.42, 0.40, 1.0)
-        return mat
-
-    def gate_stair_material():
-        mat = bpy.data.materials.get("WP_Gate_Stairs")
-        if mat is None:
-            mat = bpy.data.materials.new("WP_Gate_Stairs")
-        mat.diffuse_color = (0.62, 0.62, 0.60, 1.0)
-        return mat
-
     def add_box_faces(bm, x0, x1, y0, y1, z0, z1):
         verts = [
             bm.verts.new((x0, y0, z0)),
@@ -981,7 +1011,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         add_top_run(-base_half_width, -1.0)
         add_top_run(base_half_width, 1.0)
 
-        bm.normal_update()
+        apply_bmesh_materials(mesh, bm, *material_pair(s, "stair_material", "stair_top_material", "stair", "stair_top"))
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
@@ -992,7 +1022,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         stair_obj[WALL_ID_TAG] = wall_id
         stair_obj.hide_render = False
         stair_obj.hide_set(False)
-        stair_obj.data.materials.append(gate_stair_material())
         ensure_collection(context).objects.link(stair_obj)
         stair_obj.matrix_world = matrix_world.copy()
         parent_keep_transform(stair_obj, wall_obj)
@@ -1060,7 +1089,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             add_stair_run(-gate_half - side_gap, -1.0, y0, y1)
             add_stair_run(gate_half + side_gap, 1.0, y0, y1)
 
-        bm.normal_update()
+        apply_bmesh_materials(mesh, bm, *material_pair(s, "stair_material", "stair_top_material", "stair", "stair_top"))
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
@@ -1071,7 +1100,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         stair_obj[WALL_ID_TAG] = wall_id
         stair_obj.hide_render = False
         stair_obj.hide_set(False)
-        stair_obj.data.materials.append(gate_stair_material())
         ensure_collection(context).objects.link(stair_obj)
 
         local_gate_m = inv @ gate_obj.matrix_world
@@ -1190,7 +1218,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             except ValueError:
                 pass
 
-        bm.normal_update()
+        apply_bmesh_materials(tunnel_mesh, bm, *material_pair(s, "gate_material", "gate_top_material", "gate", "gate_top"))
         bm.to_mesh(tunnel_mesh)
         bm.free()
         tunnel_mesh.update()
@@ -1205,7 +1233,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         tunnel_obj.show_in_front = False
         tunnel_obj.show_name = False
         tunnel_obj.color = (0.42, 0.42, 0.40, 1.0)
-        tunnel_obj.data.materials.append(gate_tunnel_material())
         ensure_collection(context).objects.link(tunnel_obj)
 
         tunnel_obj.matrix_world = gate_obj.matrix_world.copy()
@@ -1333,8 +1360,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                             add_prism(-tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
                             add_prism(tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
                         offset_y += step
+        apply_bmesh_materials(mesh, bm, *material_pair(s, "gate_material", "gate_top_material", "gate", "gate_top"))
         bm.to_mesh(mesh)
         bm.free()
+        mesh.update()
 
         instance = bpy.data.objects.new(f"GATE_BASE_{wall_id:03d}_{idx:03d}", mesh)
         instance[ADDON_TAG] = True
@@ -1397,13 +1426,6 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
             except ValueError:
                 pass
 
-    def stair_material():
-        mat = bpy.data.materials.get("WP_Gate_Stairs")
-        if mat is None:
-            mat = bpy.data.materials.new("WP_Gate_Stairs")
-        mat.diffuse_color = (0.62, 0.62, 0.60, 1.0)
-        return mat
-
     def create_top_access_stairs(idx, base_half_width, base_height, matrix_world):
         if not bool(getattr(s, "tower_wall_stairs_enabled", True)) or base_height <= s.wall_height + 1e-6:
             return
@@ -1428,7 +1450,7 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
 
         add_top_run(-base_half_width, -1.0)
         add_top_run(base_half_width, 1.0)
-        bm.normal_update()
+        apply_bmesh_materials(mesh, bm, *material_pair(s, "stair_material", "stair_top_material", "stair", "stair_top"))
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
@@ -1439,7 +1461,6 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         stair_obj[WALL_ID_TAG] = wall_id
         stair_obj.hide_render = False
         stair_obj.hide_set(False)
-        stair_obj.data.materials.append(stair_material())
         ensure_collection(context).objects.link(stair_obj)
         stair_obj.matrix_world = matrix_world.copy()
         parent_keep_transform(stair_obj, wall_obj)
@@ -1518,7 +1539,7 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                             add_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
                         offset_y += step
 
-        bm.normal_update()
+        apply_bmesh_materials(mesh, bm, *material_pair(s, "tower_material", "tower_top_material", "tower", "tower_top"))
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
@@ -1986,7 +2007,7 @@ def build_wall_mesh(scene, context=None):
             # Triangulating them removes the visible "twist" Blender shows on those faces.
             bmesh.ops.triangulate(bm, faces=list(bm.faces))
 
-    bm.normal_update()
+    apply_bmesh_materials(mesh, bm, *material_pair(s, "wall_material", "wall_top_material", "wall", "wall_top"))
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
