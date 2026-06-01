@@ -23,6 +23,13 @@ class WPWallSettings(PropertyGroup):
     wall_scale: FloatProperty(name="Wall Scale", default=1.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     wall_z_offset: FloatProperty(name="Wall Z Offset", default=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     wall_rotation: FloatProperty(name="Wall Rotation", default=0.0, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_length: FloatProperty(name="Tower Length", default=2.0, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_base_style: EnumProperty(name="Tower Base", items=gate_base_items(), default='FORTIFIED', update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_base_width_mult: FloatProperty(name="Tower Base Width x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_base_thickness_mult: FloatProperty(name="Tower Base Thickness x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_base_height_mult: FloatProperty(name="Tower Base Height x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_base_bottom_width_mult: FloatProperty(name="Tower Bottom Width x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_base_bottom_thickness_mult: FloatProperty(name="Tower Bottom Thickness x", default=1.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_length: FloatProperty(name="Gate Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_length(self, ctx))
     gate_height: FloatProperty(name="Gate Height", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_height(self, ctx))
     gate_style: EnumProperty(name="Gate Style", items=gate_style_items(), default='ARCH', update=lambda self, ctx: set_scene_gate_style(self, ctx))
@@ -128,9 +135,9 @@ def update_gate_object(self, context):
 
 def set_scene_gate_length(self, context):
     rig = active_rig(context) if context else None
-    gate_like = (sorted_gates(context.scene, rig) + sorted_towers(context.scene, rig)) if context and context.scene else []
-    if gate_like:
-        for obj in gate_like:
+    gates = sorted_gates(context.scene, rig) if context and context.scene else []
+    if gates:
+        for obj in gates:
             if object_is_valid(obj):
                 set_gate_length(obj, self.gate_length)
     else:
@@ -140,7 +147,7 @@ def set_scene_gate_length(self, context):
                 if object_is_valid(obj) and obj.get(GATE_TAG):
                     active = obj
                     break
-        if object_is_valid(active) and (active.get(GATE_TAG) or active.get(TOWER_TAG)):
+        if object_is_valid(active) and active.get(GATE_TAG):
             set_gate_length(active, self.gate_length)
     trigger_rebuild(context)
 
@@ -220,9 +227,9 @@ def update_gate_base_style_object(self, context):
 
 def set_scene_gate_base_style(self, context):
     rig = active_rig(context) if context else None
-    gate_like = (sorted_gates(context.scene, rig) + sorted_towers(context.scene, rig)) if context and context.scene else []
-    if gate_like:
-        for obj in gate_like:
+    gates = sorted_gates(context.scene, rig) if context and context.scene else []
+    if gates:
+        for obj in gates:
             if object_is_valid(obj):
                 set_gate_base_style(obj, self.gate_base_style)
     else:
@@ -232,7 +239,7 @@ def set_scene_gate_base_style(self, context):
                 if object_is_valid(obj) and obj.get(GATE_TAG):
                     active = obj
                     break
-        if object_is_valid(active) and (active.get(GATE_TAG) or active.get(TOWER_TAG)):
+        if object_is_valid(active) and active.get(GATE_TAG):
             set_gate_base_style(active, self.gate_base_style)
     trigger_rebuild(context)
 
@@ -494,11 +501,6 @@ class WPWALL_OT_add_tower(Operator):
         obj.show_in_front = True
         obj.show_name = True
         obj.hide_render = True
-        set_gate_length(obj, scene.wp_wall_settings.gate_length)
-        set_gate_height(obj, scene.wp_wall_settings.gate_height)
-        set_gate_style(obj, scene.wp_wall_settings.gate_style)
-        set_gate_base_style(obj, scene.wp_wall_settings.gate_base_style)
-
         if obj.name not in coll.objects:
             coll.objects.link(obj)
             if obj.name in context.scene.collection.objects:

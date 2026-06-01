@@ -1342,12 +1342,12 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                 pass
 
     def build_tower_mesh(tower_obj, mesh_name):
-        gate_length = max(0.05, get_gate_length(tower_obj, s.gate_length))
-        base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
-        base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
-        base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
-        bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
-        bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
+        tower_length = max(0.05, float(getattr(s, "tower_length", s.gate_length)))
+        base_width = max(0.05, tower_length * max(0.01, s.tower_base_width_mult))
+        base_thickness = max(0.05, s.wall_thickness * max(0.01, s.tower_base_thickness_mult))
+        base_height = max(0.05, s.wall_height * max(0.01, s.tower_base_height_mult))
+        bottom_width = max(0.05, base_width * max(0.01, s.tower_base_bottom_width_mult))
+        bottom_thickness = max(0.05, base_thickness * max(0.01, s.tower_base_bottom_thickness_mult))
         mesh = bpy.data.meshes.new(mesh_name)
         bm = bmesh.new()
         tw = base_width * 0.5
@@ -1409,7 +1409,7 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         return mesh
 
     for idx, tower in enumerate(towers):
-        if not object_is_valid(tower) or get_gate_base_style(tower, s.gate_base_style) != 'FORTIFIED':
+        if not object_is_valid(tower) or s.tower_base_style != 'FORTIFIED':
             continue
         mesh = build_tower_mesh(tower, f"TOWER_BASE_{wall_id:03d}_{idx:03d}_mesh")
         instance = bpy.data.objects.new(f"TOWER_BASE_{wall_id:03d}_{idx:03d}", mesh)
