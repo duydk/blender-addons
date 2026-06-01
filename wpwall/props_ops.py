@@ -128,11 +128,11 @@ def update_gate_object(self, context):
 
 def set_scene_gate_length(self, context):
     rig = active_rig(context) if context else None
-    gates = sorted_gates(context.scene, rig) if context and context.scene else []
-    if gates:
-        for gate in gates:
-            if object_is_valid(gate):
-                set_gate_length(gate, self.gate_length)
+    gate_like = (sorted_gates(context.scene, rig) + sorted_towers(context.scene, rig)) if context and context.scene else []
+    if gate_like:
+        for obj in gate_like:
+            if object_is_valid(obj):
+                set_gate_length(obj, self.gate_length)
     else:
         active = getattr(context, "active_object", None)
         if not (object_is_valid(active) and active.get(GATE_TAG)):
@@ -140,7 +140,7 @@ def set_scene_gate_length(self, context):
                 if object_is_valid(obj) and obj.get(GATE_TAG):
                     active = obj
                     break
-        if object_is_valid(active) and active.get(GATE_TAG):
+        if object_is_valid(active) and (active.get(GATE_TAG) or active.get(TOWER_TAG)):
             set_gate_length(active, self.gate_length)
     trigger_rebuild(context)
 
@@ -220,11 +220,11 @@ def update_gate_base_style_object(self, context):
 
 def set_scene_gate_base_style(self, context):
     rig = active_rig(context) if context else None
-    gates = sorted_gates(context.scene, rig) if context and context.scene else []
-    if gates:
-        for gate in gates:
-            if object_is_valid(gate):
-                set_gate_base_style(gate, self.gate_base_style)
+    gate_like = (sorted_gates(context.scene, rig) + sorted_towers(context.scene, rig)) if context and context.scene else []
+    if gate_like:
+        for obj in gate_like:
+            if object_is_valid(obj):
+                set_gate_base_style(obj, self.gate_base_style)
     else:
         active = getattr(context, "active_object", None)
         if not (object_is_valid(active) and active.get(GATE_TAG)):
@@ -232,7 +232,7 @@ def set_scene_gate_base_style(self, context):
                 if object_is_valid(obj) and obj.get(GATE_TAG):
                     active = obj
                     break
-        if object_is_valid(active) and active.get(GATE_TAG):
+        if object_is_valid(active) and (active.get(GATE_TAG) or active.get(TOWER_TAG)):
             set_gate_base_style(active, self.gate_base_style)
     trigger_rebuild(context)
 
@@ -459,6 +459,74 @@ class WPWALL_OT_remove_last_gate(Operator):
             self.report({'WARNING'}, "No gate to remove")
             return {'CANCELLED'}
         obj = gates[-1]
+        bpy.data.objects.remove(obj, do_unlink=True)
+        build_wall_mesh(scene, context)
+        return {'FINISHED'}
+
+
+class WPWALL_OT_add_tower(Operator):
+    bl_idname = "wpwall.add_tower"
+    bl_label = "Add Tower"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        scene = context.scene
+        rig = ensure_rig_object(context)
+        wall = ensure_wall_object(context)
+        coll = ensure_collection(context)
+        wall_id = wall_id_from_obj(rig)
+        waypoints = sorted_waypoints(scene, rig)
+        location = context.scene.cursor.location.copy()
+        active = context.active_object
+
+        if object_is_valid(active) and active.get(WAYPOINT_TAG) and active.get(WALL_ID_TAG) == wall_id:
+            location = active.matrix_world.translation.copy()
+        elif len(waypoints) >= 1:
+            location = waypoints[0].matrix_world.translation.copy()
+
+        bpy.ops.object.empty_add(type='CUBE', align='WORLD', location=location)
+        obj = context.active_object
+        obj.name = f"TOWER_{wall_id:03d}_{len(sorted_towers(scene, rig)):03d}"
+        obj.empty_display_size = scene.wp_wall_settings.waypoint_display_size
+        obj[ADDON_TAG] = True
+        obj[TOWER_TAG] = True
+        obj[WALL_ID_TAG] = wall_id
+        obj.show_in_front = True
+        obj.show_name = True
+        obj.hide_render = True
+        set_gate_length(obj, scene.wp_wall_settings.gate_length)
+        set_gate_height(obj, scene.wp_wall_settings.gate_height)
+        set_gate_style(obj, scene.wp_wall_settings.gate_style)
+        set_gate_base_style(obj, scene.wp_wall_settings.gate_base_style)
+
+        if obj.name not in coll.objects:
+            coll.objects.link(obj)
+            if obj.name in context.scene.collection.objects:
+                context.scene.collection.objects.unlink(obj)
+        parent_keep_transform(obj, wall)
+
+        for item in list(context.selected_objects):
+            if object_is_valid(item):
+                item.select_set(False)
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        build_wall_mesh(scene, context)
+        return {'FINISHED'}
+
+
+class WPWALL_OT_remove_last_tower(Operator):
+    bl_idname = "wpwall.remove_last_tower"
+    bl_label = "Remove Last Tower"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        scene = context.scene
+        rig = active_rig(context)
+        towers = sorted_towers(scene, rig)
+        if not towers:
+            self.report({'WARNING'}, "No tower to remove")
+            return {'CANCELLED'}
+        obj = towers[-1]
         bpy.data.objects.remove(obj, do_unlink=True)
         build_wall_mesh(scene, context)
         return {'FINISHED'}

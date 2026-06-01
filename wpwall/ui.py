@@ -9,8 +9,9 @@ def draw_main_panel(layout, context):
     active_is_waypoint = object_is_valid(active) and active.get(WAYPOINT_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_opening = object_is_valid(active) and active.get(OPENING_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_gate = object_is_valid(active) and active.get(GATE_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
+    active_is_tower = object_is_valid(active) and active.get(TOWER_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_wall = object_is_valid(active) and (
-        active.get(RIG_TAG) or active.get(WALL_OBJ_TAG) or active_is_waypoint or active_is_opening or active_is_gate
+        active.get(RIG_TAG) or active.get(WALL_OBJ_TAG) or active_is_waypoint or active_is_opening or active_is_gate or active_is_tower
     )
 
     toolbar = layout.column(align=True)
@@ -25,11 +26,13 @@ def draw_main_panel(layout, context):
     col.operator("wpwall.add_waypoint", icon='EMPTY_AXIS')
     col.operator("wpwall.add_opening", icon='SELECT_SUBTRACT')
     col.operator("wpwall.add_gate", icon='MOD_BOOLEAN')
+    col.operator("wpwall.add_tower", icon='MESH_CUBE')
     row = col.row(align=True)
     row.operator("wpwall.remove_last_waypoint", icon='REMOVE')
     row.operator("wpwall.remove_selected_waypoint", icon='X', text="")
     row.operator("wpwall.remove_last_opening", icon='X', text="")
     row.operator("wpwall.remove_last_gate", icon='PANEL_CLOSE', text="")
+    row.operator("wpwall.remove_last_tower", icon='TRASH', text="")
     nav = col.row(align=True)
     nav.operator("wpwall.select_prev_waypoint", icon='TRIA_LEFT', text="Prev WP")
     nav.operator("wpwall.select_next_waypoint", icon='TRIA_RIGHT', text="Next WP")
@@ -40,6 +43,7 @@ def draw_main_panel(layout, context):
         status.label(text=f"Waypoints: {len(sorted_waypoints(context.scene, rig))}")
         status.label(text=f"Openings: {len(sorted_openings(context.scene, rig))}")
         status.label(text=f"Gates: {len(sorted_gates(context.scene, rig))}")
+        status.label(text=f"Towers: {len(sorted_towers(context.scene, rig))}")
 
     layout.separator()
     try:
@@ -83,6 +87,21 @@ def draw_main_panel(layout, context):
             if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
                 base_col = box.column(align=True)
                 base_col.label(text="Fortified Base")
+                base_col.prop(s, "gate_base_width_mult")
+                base_col.prop(s, "gate_base_thickness_mult")
+                base_col.prop(s, "gate_base_height_mult")
+                base_col.prop(s, "gate_base_bottom_width_mult")
+                base_col.prop(s, "gate_base_bottom_thickness_mult")
+            box.label(text="Drag it to update its position on the wall")
+        elif active_is_tower:
+            box = layout.box()
+            box.label(text=f"Tower: {active.name}")
+            col = box.column(align=True)
+            col.prop(active, "wp_wall_gate_base_style")
+            col.prop(s, "gate_length")
+            if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
+                base_col = box.column(align=True)
+                base_col.label(text="Tower Base")
                 base_col.prop(s, "gate_base_width_mult")
                 base_col.prop(s, "gate_base_thickness_mult")
                 base_col.prop(s, "gate_base_height_mult")
@@ -141,6 +160,7 @@ def draw_panel_safe(layout, context):
         col.operator("wpwall.add_waypoint", icon='EMPTY_AXIS')
         col.operator("wpwall.add_opening", icon='SELECT_SUBTRACT')
         col.operator("wpwall.add_gate", icon='MOD_BOOLEAN')
+        col.operator("wpwall.add_tower", icon='MESH_CUBE')
         col.operator("wpwall.build_wall", icon='MOD_BUILD')
         layout.separator()
         layout.operator("wpwall.clear_all", icon='TRASH')

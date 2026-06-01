@@ -14,6 +14,7 @@ WALL_INSTANCE_TAG = "wp_wall_instance"
 TOWER_INSTANCE_TAG = "wp_wall_tower_instance"
 OPENING_TAG = "wp_wall_opening"
 GATE_TAG = "wp_wall_gate"
+TOWER_TAG = "wp_wall_tower"
 GATE_INSTANCE_TAG = "wp_wall_gate_instance"
 
 
@@ -167,6 +168,19 @@ def sorted_gates(scene, rig=None):
     items = []
     for obj in bpy.data.objects:
         if not obj.get(GATE_TAG):
+            continue
+        if wall_id is not None and obj.get(WALL_ID_TAG) != wall_id:
+            continue
+        items.append(obj)
+    items.sort(key=lambda item: item.name)
+    return items
+
+
+def sorted_towers(scene, rig=None):
+    wall_id = wall_id_from_obj(rig) if rig else None
+    items = []
+    for obj in bpy.data.objects:
+        if not obj.get(TOWER_TAG):
             continue
         if wall_id is not None and obj.get(WALL_ID_TAG) != wall_id:
             continue
@@ -339,6 +353,32 @@ def bind_gates_to_wall(scene, rig, wall_obj, local_points):
         )
         gate.matrix_parent_inverse = Matrix.Identity(4)
         gate.matrix_world = wall_obj.matrix_world @ local_matrix
+
+
+def bind_towers_to_wall(scene, rig, wall_obj, local_points):
+    s = settings(scene)
+    if len(local_points) < 2:
+        return
+    closed = bool(s.closed_loop and len(local_points) > 2)
+    inv = wall_obj.matrix_world.inverted_safe()
+
+    for tower in sorted_towers(scene, rig):
+        if not object_is_valid(tower):
+            continue
+        target_local = inv @ tower.matrix_world.translation.copy()
+        hit = nearest_segment_info(local_points, target_local, closed)
+        if hit is None:
+            continue
+        _seg_idx, snapped, tangent = hit
+        if tangent is None:
+            tangent = Vector((1.0, 0.0, 0.0))
+        angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
+        local_matrix = (
+            Matrix.Translation(Vector((snapped.x, snapped.y, 0.0)))
+            @ Matrix.Rotation(angle, 4, 'Z')
+        )
+        tower.matrix_parent_inverse = Matrix.Identity(4)
+        tower.matrix_world = wall_obj.matrix_world @ local_matrix
 
 
 def ensure_opening_boolean(scene, context, wall_obj, rig):
@@ -803,25 +843,6 @@ def clear_gate_instances(rig):
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
-def tower_points_with_tangent(points, closed):
-    out = []
-    for idx, point in enumerate(points):
-        if closed and len(points) > 2:
-            prev_point = points[(idx - 1) % len(points)]
-            next_point = points[(idx + 1) % len(points)]
-            tangent = _safe_dir_2d(prev_point, next_point)
-        elif idx < len(points) - 1:
-            tangent = _safe_dir_2d(points[idx], points[idx + 1])
-        elif idx > 0:
-            tangent = _safe_dir_2d(points[idx - 1], points[idx])
-        else:
-            tangent = Vector((1.0, 0.0, 0.0))
-        if tangent is None:
-            tangent = Vector((1.0, 0.0, 0.0))
-        out.append((point, tangent))
-    return out
-
-
 def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
     clear_wall_instances(rig)
     s = settings(scene)
@@ -1282,20 +1303,14 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         bool_mod.object = gate
 
 
-def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_points):
+def rebuild_tower_instances(scene, context, rig, wall_obj):
     clear_tower_instances(rig)
     s = settings(scene)
-    if get_gate_base_style(None, s.gate_base_style) != 'FORTIFIED' or len(local_points) < 1:
+    towers = sorted_towers(scene, rig)
+    if not towers:
         return
 
     wall_id = wall_id_from_obj(rig)
-    closed = bool(s.closed_loop and len(local_points) > 2)
-    gate_length = max(0.05, s.gate_length)
-    base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
-    base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
-    base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
-    bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
-    bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
     parapet_h = max(0.0, s.parapet_height)
     parapet_w = max(0.0, s.parapet_width)
     crenel_h = max(0.0, s.crenel_height)
@@ -1326,7 +1341,13 @@ def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_
             except ValueError:
                 pass
 
-    def build_tower_mesh(mesh_name):
+    def build_tower_mesh(tower_obj, mesh_name):
+        gate_length = max(0.05, get_gate_length(tower_obj, s.gate_length))
+        base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
+        base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
+        base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
+        bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
+        bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
         mesh = bpy.data.meshes.new(mesh_name)
         bm = bmesh.new()
         tw = base_width * 0.5
@@ -1387,20 +1408,18 @@ def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_
         mesh.update()
         return mesh
 
-    for idx, (point, tangent) in enumerate(tower_points_with_tangent(local_points, closed)):
-        mesh = build_tower_mesh(f"TOWER_{wall_id:03d}_{idx:03d}_mesh")
-        instance = bpy.data.objects.new(f"TOWER_{wall_id:03d}_{idx:03d}", mesh)
+    for idx, tower in enumerate(towers):
+        if not object_is_valid(tower) or get_gate_base_style(tower, s.gate_base_style) != 'FORTIFIED':
+            continue
+        mesh = build_tower_mesh(tower, f"TOWER_BASE_{wall_id:03d}_{idx:03d}_mesh")
+        instance = bpy.data.objects.new(f"TOWER_BASE_{wall_id:03d}_{idx:03d}", mesh)
         instance[ADDON_TAG] = True
         instance[TOWER_INSTANCE_TAG] = True
         instance[WALL_ID_TAG] = wall_id
         instance.hide_render = False
         instance.hide_set(False)
         ensure_collection(context).objects.link(instance)
-        placement = (
-            Matrix.Translation((wall_obj.matrix_world @ point))
-            @ Matrix.Rotation(tangent.to_2d().angle_signed(Vector((1.0, 0.0))), 4, 'Z')
-        )
-        instance.matrix_world = placement
+        instance.matrix_world = tower.matrix_world.copy()
         parent_keep_transform(instance, wall_obj)
 
 
@@ -1726,6 +1745,7 @@ def build_wall_mesh(scene, context=None):
     mesh.update()
     bind_openings_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     bind_gates_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
+    bind_towers_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     ensure_opening_boolean(scene, ctx, wall_obj, rig)
 
     use_wall_source = object_is_valid(s.wall_source)
@@ -1733,10 +1753,5 @@ def build_wall_mesh(scene, context=None):
     wall_obj.hide_render = use_wall_source
     rebuild_wall_instances(scene, ctx, rig, wall_obj, points if len(points) >= 2 else [])
 
-    tower_points = []
-    if raw_waypoints:
-        inv = wall_obj.matrix_world.inverted_safe()
-        for obj in raw_waypoints:
-            tower_points.append(inv @ obj.matrix_world.translation.copy())
-    rebuild_tower_instances(scene, ctx, rig, wall_obj, raw_waypoints, tower_points if len(tower_points) >= 1 else [])
+    rebuild_tower_instances(scene, ctx, rig, wall_obj)
     rebuild_gate_instances(scene, ctx, rig, wall_obj)
