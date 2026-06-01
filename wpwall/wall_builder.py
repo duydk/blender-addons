@@ -48,10 +48,20 @@ def setting_material(s, attr_name, fallback_key):
 
 
 def material_pair(s, base_attr, top_attr, base_key, top_key):
-    return (
-        setting_material(s, base_attr, base_key),
-        setting_material(s, top_attr, top_key),
-    )
+    base_override = getattr(s, base_attr, None)
+    top_override = getattr(s, top_attr, None)
+
+    if base_attr == "wall_material":
+        base_mat = base_override or default_material(base_key)
+    else:
+        base_mat = base_override or getattr(s, "wall_material", None) or default_material("wall")
+
+    if top_attr == "wall_top_material":
+        top_mat = top_override or base_mat
+    else:
+        top_mat = top_override or getattr(s, "wall_top_material", None) or base_mat
+
+    return base_mat, top_mat
 
 
 def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5):
