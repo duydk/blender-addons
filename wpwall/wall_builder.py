@@ -1626,8 +1626,7 @@ def build_wall_mesh(scene, context=None):
                 stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
                 stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
                 side_gap = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
-                stair_total_len = stair_length + (4.0 * (stair_length / stair_steps))
-                margin = max(0.05, s.parapet_width, s.crenel_width * 0.5)
+                top_step_len = (stair_length / stair_steps) * 5.0
                 stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
                 stair_sides = []
                 if stair_side in {'INSIDE', 'BOTH'}:
@@ -1653,13 +1652,13 @@ def build_wall_mesh(scene, context=None):
                     gate_center = (snapped - seg_a).dot(tangent)
                     gate_half = max(0.05, get_gate_length(gate, s.gate_length)) * 0.5
                     relative_spans = (
-                        (-gate_half - side_gap - stair_total_len, -gate_half - side_gap),
-                        (gate_half + side_gap, gate_half + side_gap + stair_total_len),
+                        (-gate_half - side_gap - top_step_len, -gate_half - side_gap),
+                        (gate_half + side_gap, gate_half + side_gap + top_step_len),
                     )
                     for side in stair_sides:
                         for start_rel, end_rel in relative_spans:
-                            start = max(0.0, gate_center + start_rel - margin)
-                            end = min(seg_len, gate_center + end_rel + margin)
+                            start = max(0.0, gate_center + start_rel)
+                            end = min(seg_len, gate_center + end_rel)
                             if end > start + 1e-6:
                                 stair_clearances.append((seg_idx, side, start, end))
 
