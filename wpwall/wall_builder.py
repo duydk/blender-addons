@@ -106,18 +106,18 @@ def create_brick_wall_materials(s=None):
     bump_strength = max(0.0, float(getattr(s, "brick_bump_strength", 0.08))) if s else 0.08
     base = procedural_brick_material(
         "WP_Brick_Wall",
-        (0.64, 0.48, 0.30, 1.0),
-        (0.36, 0.26, 0.18, 1.0),
-        (0.88, 0.84, 0.74, 1.0),
+        (0.60, 0.51, 0.39, 1.0),
+        (0.52, 0.44, 0.34, 1.0),
+        (0.72, 0.68, 0.58, 1.0),
         scale=brick_scale,
         mortar_size=mortar_size,
         bump_strength=bump_strength,
     )
     top = procedural_brick_material(
         "WP_Brick_Wall_Top",
-        (0.72, 0.62, 0.42, 1.0),
-        (0.46, 0.36, 0.24, 1.0),
-        (0.90, 0.86, 0.76, 1.0),
+        (0.66, 0.58, 0.45, 1.0),
+        (0.58, 0.50, 0.39, 1.0),
+        (0.76, 0.72, 0.62, 1.0),
         scale=brick_scale * 1.25,
         mortar_size=mortar_size,
         bump_strength=bump_strength,
