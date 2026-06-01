@@ -65,8 +65,10 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
     bsdf.location = (260, 0)
     brick = nodes.new(type='ShaderNodeTexBrick')
     brick.location = (-220, 80)
+    mapping = nodes.new(type='ShaderNodeMapping')
+    mapping.location = (-440, 80)
     texcoord = nodes.new(type='ShaderNodeTexCoord')
-    texcoord.location = (-460, 80)
+    texcoord.location = (-660, 80)
     bump = nodes.new(type='ShaderNodeBump')
     bump.location = (20, -180)
 
@@ -75,13 +77,17 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
     _set_socket_default(brick, "Mortar", mortar_color)
     _set_socket_default(brick, "Scale", scale)
     _set_socket_default(brick, "Mortar Size", mortar_size)
-    _set_socket_default(brick, "Mortar Smooth", 0.12)
+    _set_socket_default(brick, "Mortar Smooth", 0.02)
+    _set_socket_default(brick, "Brick Width", 0.55)
+    _set_socket_default(brick, "Row Height", 0.23)
     _set_socket_default(bsdf, "Roughness", 0.78)
     _set_socket_default(bump, "Strength", bump_strength)
     _set_socket_default(bump, "Distance", 0.05)
 
-    if "UV" in texcoord.outputs and "Vector" in brick.inputs:
-        links.new(texcoord.outputs["UV"], brick.inputs["Vector"])
+    if "UV" in texcoord.outputs and "Vector" in mapping.inputs:
+        links.new(texcoord.outputs["UV"], mapping.inputs["Vector"])
+    if "Vector" in mapping.outputs and "Vector" in brick.inputs:
+        links.new(mapping.outputs["Vector"], brick.inputs["Vector"])
     if "Color" in brick.outputs and "Base Color" in bsdf.inputs:
         links.new(brick.outputs["Color"], bsdf.inputs["Base Color"])
     if "Fac" in brick.outputs and "Height" in bump.inputs:
@@ -95,23 +101,23 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
 
 
 def create_brick_wall_materials(s=None):
-    brick_scale = max(0.1, float(getattr(s, "brick_scale", 3.2))) if s else 3.2
+    brick_scale = max(0.1, float(getattr(s, "brick_scale", 8.0))) if s else 8.0
     mortar_size = max(0.001, float(getattr(s, "brick_mortar_size", 0.035))) if s else 0.035
     bump_strength = max(0.0, float(getattr(s, "brick_bump_strength", 0.08))) if s else 0.08
     base = procedural_brick_material(
         "WP_Brick_Wall",
-        (0.62, 0.48, 0.32, 1.0),
-        (0.46, 0.35, 0.24, 1.0),
-        (0.78, 0.72, 0.62, 1.0),
+        (0.64, 0.48, 0.30, 1.0),
+        (0.36, 0.26, 0.18, 1.0),
+        (0.88, 0.84, 0.74, 1.0),
         scale=brick_scale,
         mortar_size=mortar_size,
         bump_strength=bump_strength,
     )
     top = procedural_brick_material(
         "WP_Brick_Wall_Top",
-        (0.70, 0.62, 0.48, 1.0),
-        (0.54, 0.46, 0.34, 1.0),
-        (0.82, 0.78, 0.68, 1.0),
+        (0.72, 0.62, 0.42, 1.0),
+        (0.46, 0.36, 0.24, 1.0),
+        (0.90, 0.86, 0.76, 1.0),
         scale=brick_scale * 1.25,
         mortar_size=mortar_size,
         bump_strength=bump_strength,

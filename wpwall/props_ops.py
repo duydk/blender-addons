@@ -31,7 +31,7 @@ class WPWallSettings(PropertyGroup):
     tower_top_material: PointerProperty(name="Tower Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     stair_material: PointerProperty(name="Stair", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     stair_top_material: PointerProperty(name="Stair Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
-    brick_scale: FloatProperty(name="Brick Scale", default=3.2, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_scale: FloatProperty(name="Brick Scale", default=8.0, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     brick_mortar_size: FloatProperty(name="Mortar Size", default=0.035, min=0.001, max=0.25, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     brick_bump_strength: FloatProperty(name="Brick Bump", default=0.08, min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     tower_length: FloatProperty(name="Tower Length", default=2.0, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
