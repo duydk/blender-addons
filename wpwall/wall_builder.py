@@ -970,7 +970,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
 
         def add_top_run(inner_x, x_dir):
             for step in range(stair_steps):
-                d0 = step * step_len
+                d0 = (stair_steps - step - 1) * step_len
                 d1 = d0 + step_len
                 z0 = s.wall_height
                 z1 = s.wall_height + ((step + 1) * step_height)
@@ -1417,7 +1417,7 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
 
         def add_top_run(inner_x, x_dir):
             for step in range(stair_steps):
-                d0 = step * step_len
+                d0 = (stair_steps - step - 1) * step_len
                 d1 = d0 + step_len
                 z0 = s.wall_height
                 z1 = s.wall_height + ((step + 1) * step_height)
