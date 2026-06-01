@@ -962,7 +962,6 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         stair_steps = max(1, int(getattr(s, "gate_wall_stair_steps", 7)))
         rise = base_height - s.wall_height
         step_len = max(0.05, max(0.1, float(getattr(s, "gate_wall_stair_length", 1.6))) / stair_steps)
-        access_len = step_len * stair_steps
         step_height = rise / stair_steps
         half_depth = max(0.025, float(getattr(s, "gate_wall_stair_depth", 0.6)) * 0.5)
 
@@ -970,31 +969,14 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         bm = bmesh.new()
 
         def add_top_run(inner_x, x_dir):
-            profile = [(access_len, 0.0), (0.0, 0.0)]
-            for level in range(1, stair_steps + 1):
-                z = level * step_height
-                d0 = access_len - ((stair_steps - level + 1) * step_len)
+            for step in range(stair_steps):
+                d0 = step * step_len
                 d1 = d0 + step_len
-                profile.append((d0, z))
-                profile.append((d1, z))
-            profile.append((0.0, rise))
-
-            front = [bm.verts.new((inner_x + (d * x_dir), -half_depth, s.wall_height + z)) for d, z in profile]
-            back = [bm.verts.new((inner_x + (d * x_dir), half_depth, s.wall_height + z)) for d, z in profile]
-            try:
-                bm.faces.new(front)
-            except ValueError:
-                pass
-            try:
-                bm.faces.new(tuple(reversed(back)))
-            except ValueError:
-                pass
-            for i in range(len(profile)):
-                j = (i + 1) % len(profile)
-                try:
-                    bm.faces.new((front[i], front[j], back[j], back[i]))
-                except ValueError:
-                    pass
+                z0 = s.wall_height
+                z1 = s.wall_height + ((step + 1) * step_height)
+                x0 = inner_x + (d0 * x_dir)
+                x1 = inner_x + (d1 * x_dir)
+                add_box_faces(bm, min(x0, x1), max(x0, x1), -half_depth, half_depth, z0, z1)
 
         add_top_run(-base_half_width, -1.0)
         add_top_run(base_half_width, 1.0)
@@ -1427,7 +1409,6 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         stair_steps = max(1, int(getattr(s, "tower_wall_stair_steps", 7)))
         rise = base_height - s.wall_height
         step_len = max(0.05, max(0.1, float(getattr(s, "tower_wall_stair_length", 1.6))) / stair_steps)
-        access_len = step_len * stair_steps
         step_height = rise / stair_steps
         half_depth = max(0.025, float(getattr(s, "tower_wall_stair_depth", 0.6)) * 0.5)
 
@@ -1435,30 +1416,14 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         bm = bmesh.new()
 
         def add_top_run(inner_x, x_dir):
-            profile = [(access_len, 0.0), (0.0, 0.0)]
-            for level in range(1, stair_steps + 1):
-                z = level * step_height
-                d0 = access_len - ((stair_steps - level + 1) * step_len)
+            for step in range(stair_steps):
+                d0 = step * step_len
                 d1 = d0 + step_len
-                profile.append((d0, z))
-                profile.append((d1, z))
-            profile.append((0.0, rise))
-            front = [bm.verts.new((inner_x + (d * x_dir), -half_depth, s.wall_height + z)) for d, z in profile]
-            back = [bm.verts.new((inner_x + (d * x_dir), half_depth, s.wall_height + z)) for d, z in profile]
-            try:
-                bm.faces.new(front)
-            except ValueError:
-                pass
-            try:
-                bm.faces.new(tuple(reversed(back)))
-            except ValueError:
-                pass
-            for i in range(len(profile)):
-                j = (i + 1) % len(profile)
-                try:
-                    bm.faces.new((front[i], front[j], back[j], back[i]))
-                except ValueError:
-                    pass
+                z0 = s.wall_height
+                z1 = s.wall_height + ((step + 1) * step_height)
+                x0 = inner_x + (d0 * x_dir)
+                x1 = inner_x + (d1 * x_dir)
+                add_prism(bm, min(x0, x1), max(x0, x1), -half_depth, half_depth, z0, z1)
 
         add_top_run(-base_half_width, -1.0)
         add_top_run(base_half_width, 1.0)
