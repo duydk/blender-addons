@@ -1620,6 +1620,111 @@ def build_wall_mesh(scene, context=None):
                     minus_inner_cap_t.append(bm.verts.new(right_inner + Vector((0.0, 0.0, s.parapet_height))))
             edge_count = n if closed else n - 1
 
+            stair_clearances = []
+            if bool(getattr(s, "gate_stairs_enabled", True)) and edge_count > 0:
+                inv = wall_obj.matrix_world.inverted_safe()
+                stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
+                stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+                side_gap = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
+                stair_total_len = stair_length + (4.0 * (stair_length / stair_steps))
+                margin = max(0.05, s.parapet_width, s.crenel_width * 0.5)
+                stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
+                stair_sides = []
+                if stair_side in {'INSIDE', 'BOTH'}:
+                    stair_sides.append(1.0)
+                if stair_side in {'OUTSIDE', 'BOTH'}:
+                    stair_sides.append(-1.0)
+
+                for gate in sorted_gates(scene, rig):
+                    if not object_is_valid(gate):
+                        continue
+                    gate_pos = inv @ gate.matrix_world.translation.copy()
+                    hit = nearest_segment_info(points, gate_pos, closed)
+                    if hit is None:
+                        continue
+                    seg_idx, snapped, tangent = hit
+                    if tangent is None or seg_idx < 0 or seg_idx >= edge_count:
+                        continue
+                    seg_a = points[seg_idx]
+                    seg_b = points[(seg_idx + 1) % n]
+                    seg_len = (seg_b - seg_a).length
+                    if seg_len <= 1e-6:
+                        continue
+                    gate_center = (snapped - seg_a).dot(tangent)
+                    gate_half = max(0.05, get_gate_length(gate, s.gate_length)) * 0.5
+                    relative_spans = (
+                        (-gate_half - side_gap - stair_total_len, -gate_half - side_gap),
+                        (gate_half + side_gap, gate_half + side_gap + stair_total_len),
+                    )
+                    for side in stair_sides:
+                        for start_rel, end_rel in relative_spans:
+                            start = max(0.0, gate_center + start_rel - margin)
+                            end = min(seg_len, gate_center + end_rel + margin)
+                            if end > start + 1e-6:
+                                stair_clearances.append((seg_idx, side, start, end))
+
+            def stair_clearance_overlaps(seg_idx, side, start, end):
+                for clear_seg, clear_side, clear_start, clear_end in stair_clearances:
+                    if clear_seg == seg_idx and clear_side == side and start < clear_end and end > clear_start:
+                        return True
+                return False
+
+            def stair_clearance_open_t_ranges(seg_idx, side, seg_len):
+                if seg_len <= 1e-6:
+                    return []
+                blocked = []
+                for clear_seg, clear_side, clear_start, clear_end in stair_clearances:
+                    if clear_seg == seg_idx and clear_side == side:
+                        blocked.append((
+                            _clamp(clear_start / seg_len, 0.0, 1.0),
+                            _clamp(clear_end / seg_len, 0.0, 1.0),
+                        ))
+                if not blocked:
+                    return [(0.0, 1.0)]
+                blocked.sort()
+                merged = []
+                for start, end in blocked:
+                    if end <= start + 1e-6:
+                        continue
+                    if not merged or start > merged[-1][1] + 1e-6:
+                        merged.append([start, end])
+                    else:
+                        merged[-1][1] = max(merged[-1][1], end)
+
+                open_ranges = []
+                cursor = 0.0
+                for start, end in merged:
+                    if start > cursor + 1e-6:
+                        open_ranges.append((cursor, start))
+                    cursor = max(cursor, end)
+                if cursor < 1.0 - 1e-6:
+                    open_ranges.append((cursor, 1.0))
+                return open_ranges
+
+            def add_split_parapet_faces(face_list, seg_idx, side, outer_base0, outer_base1, inner_base0, inner_base1, outer_top0, outer_top1, inner_top0, inner_top1):
+                seg_len = (points[(seg_idx + 1) % n] - points[seg_idx]).length
+                for t0, t1 in stair_clearance_open_t_ranges(seg_idx, side, seg_len):
+                    ob0 = bm.verts.new(outer_base0.co.lerp(outer_base1.co, t0))
+                    ob1 = bm.verts.new(outer_base0.co.lerp(outer_base1.co, t1))
+                    ib0 = bm.verts.new(inner_base0.co.lerp(inner_base1.co, t0))
+                    ib1 = bm.verts.new(inner_base0.co.lerp(inner_base1.co, t1))
+                    ot0 = bm.verts.new(outer_top0.co.lerp(outer_top1.co, t0))
+                    ot1 = bm.verts.new(outer_top0.co.lerp(outer_top1.co, t1))
+                    it0 = bm.verts.new(inner_top0.co.lerp(inner_top1.co, t0))
+                    it1 = bm.verts.new(inner_top0.co.lerp(inner_top1.co, t1))
+                    if side > 0.0:
+                        face_list.extend([
+                            [ob0, ob1, ot1, ot0],
+                            [ib1, ib0, it0, it1],
+                            [ot0, ot1, it1, it0],
+                        ])
+                    else:
+                        face_list.extend([
+                            [ob1, ob0, ot0, ot1],
+                            [ib0, ib1, it1, it0],
+                            [it0, it1, ot1, ot0],
+                        ])
+
             for i in range(edge_count):
                 j = (i + 1) % n
                 turn_sign = 0.0
@@ -1663,13 +1768,21 @@ def build_wall_mesh(scene, context=None):
                     faces.extend([
                         [plus_b[i], plus_t[i], plus_t[j], plus_b[j]],
                         [minus_b[j], minus_t[j], minus_t[i], minus_b[i]],
-                        [plus_t[i], plus_t[j], plus_cap_t[j], plus_cap_t[i]],
-                        [plus_inner_t[j], plus_inner_t[i], plus_inner_cap_t[i], plus_inner_cap_t[j]],
-                        [plus_cap_t[i], plus_cap_t[j], plus_inner_cap_t[j], plus_inner_cap_t[i]],
-                        [minus_t[j], minus_t[i], minus_cap_t[i], minus_cap_t[j]],
-                        [minus_inner_t[i], minus_inner_t[j], minus_inner_cap_t[j], minus_inner_cap_t[i]],
-                        [minus_inner_cap_t[i], minus_inner_cap_t[j], minus_cap_t[j], minus_cap_t[i]],
                     ])
+                    add_split_parapet_faces(
+                        faces, i, 1.0,
+                        plus_t[i], plus_t[j],
+                        plus_inner_t[i], plus_inner_t[j],
+                        plus_cap_t[i], plus_cap_t[j],
+                        plus_inner_cap_t[i], plus_inner_cap_t[j],
+                    )
+                    add_split_parapet_faces(
+                        faces, i, -1.0,
+                        minus_t[i], minus_t[j],
+                        minus_inner_t[i], minus_inner_t[j],
+                        minus_cap_t[i], minus_cap_t[j],
+                        minus_inner_cap_t[i], minus_inner_cap_t[j],
+                    )
                 else:
                     if k is not None and abs(turn_sign) > 1e-8:
                         if turn_sign > 0.0:
@@ -1770,10 +1883,10 @@ def build_wall_mesh(scene, context=None):
                         continue
                     normal = Vector((-tangent.y, tangent.x, 0.0))
                     side_rails = [
-                        (plus[i], plus[j], -normal),
-                        (minus[i], minus[j], normal),
+                        (plus[i], plus[j], -normal, 1.0),
+                        (minus[i], minus[j], normal, -1.0),
                     ]
-                    for outer_a, outer_b, inward in side_rails:
+                    for outer_a, outer_b, inward, side in side_rails:
                         seg_vec = outer_b - outer_a
                         seg_len = seg_vec.length
                         if seg_len <= 1e-6:
@@ -1782,6 +1895,9 @@ def build_wall_mesh(scene, context=None):
                         while offset + s.crenel_width <= seg_len + 1e-6:
                             t0 = offset / seg_len
                             t1 = min(1.0, (offset + s.crenel_width) / seg_len)
+                            if stair_clearance_overlaps(i, side, offset, offset + s.crenel_width):
+                                offset += step
+                                continue
                             base0 = outer_a.lerp(outer_b, t0) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
                             base1 = outer_a.lerp(outer_b, t1) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
                             inner0 = base0 + inward * s.parapet_width
