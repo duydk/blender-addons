@@ -956,6 +956,65 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             except ValueError:
                 pass
 
+    def create_top_access_stairs(name_prefix, idx, base_half_width, base_height, matrix_world, instance_tag):
+        if base_height <= s.wall_height + 1e-6:
+            return
+        stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+        rise = base_height - s.wall_height
+        step_len = max(0.05, max(0.1, float(getattr(s, "gate_stair_length", 1.6))) / stair_steps)
+        access_len = step_len * stair_steps
+        step_height = rise / stair_steps
+        half_depth = max(0.025, min(s.wall_thickness * 0.5, base_half_width))
+
+        mesh = bpy.data.meshes.new(f"{name_prefix}_TOP_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+
+        def add_top_run(inner_x, x_dir):
+            profile = [(access_len, 0.0), (0.0, 0.0), (0.0, rise)]
+            for level in range(stair_steps - 1, 0, -1):
+                z = level * step_height
+                d0 = (stair_steps - level - 1) * step_len
+                d1 = d0 + step_len
+                profile.append((d0, z))
+                profile.append((d1, z))
+            profile.append((access_len, 0.0))
+
+            front = [bm.verts.new((inner_x + (d * x_dir), -half_depth, s.wall_height + z)) for d, z in profile]
+            back = [bm.verts.new((inner_x + (d * x_dir), half_depth, s.wall_height + z)) for d, z in profile]
+            try:
+                bm.faces.new(front)
+            except ValueError:
+                pass
+            try:
+                bm.faces.new(tuple(reversed(back)))
+            except ValueError:
+                pass
+            for i in range(len(profile)):
+                j = (i + 1) % len(profile)
+                try:
+                    bm.faces.new((front[i], front[j], back[j], back[i]))
+                except ValueError:
+                    pass
+
+        add_top_run(-base_half_width, -1.0)
+        add_top_run(base_half_width, 1.0)
+
+        bm.normal_update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        stair_obj = bpy.data.objects.new(f"{name_prefix}_TOP_STAIRS_{wall_id:03d}_{idx:03d}", mesh)
+        stair_obj[ADDON_TAG] = True
+        stair_obj[instance_tag] = True
+        stair_obj[WALL_ID_TAG] = wall_id
+        stair_obj.hide_render = False
+        stair_obj.hide_set(False)
+        stair_obj.data.materials.append(gate_stair_material())
+        ensure_collection(context).objects.link(stair_obj)
+        stair_obj.matrix_world = matrix_world.copy()
+        parent_keep_transform(stair_obj, wall_obj)
+
     def create_gate_stairs_instance(gate_obj, idx):
         if not object_is_valid(gate_obj) or not bool(getattr(s, "gate_stairs_enabled", True)):
             return
@@ -1308,6 +1367,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         )
         instance.matrix_world = wall_obj.matrix_world @ placement_local
         parent_keep_transform(instance, wall_obj)
+        create_top_access_stairs("GATE_BASE", idx, tw, h, instance.matrix_world, GATE_INSTANCE_TAG)
 
         # Cut the fortified base using the same gate cutter shape so the opening passes through.
         bool_mod = instance.modifiers.new(name="WP_GateBaseCut", type='BOOLEAN')
@@ -1353,6 +1413,70 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                 bm.faces.new(face)
             except ValueError:
                 pass
+
+    def stair_material():
+        mat = bpy.data.materials.get("WP_Gate_Stairs")
+        if mat is None:
+            mat = bpy.data.materials.new("WP_Gate_Stairs")
+        mat.diffuse_color = (0.62, 0.62, 0.60, 1.0)
+        return mat
+
+    def create_top_access_stairs(idx, base_half_width, base_height, matrix_world):
+        if base_height <= s.wall_height + 1e-6:
+            return
+        stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+        rise = base_height - s.wall_height
+        step_len = max(0.05, max(0.1, float(getattr(s, "gate_stair_length", 1.6))) / stair_steps)
+        access_len = step_len * stair_steps
+        step_height = rise / stair_steps
+        half_depth = max(0.025, min(s.wall_thickness * 0.5, base_half_width))
+
+        mesh = bpy.data.meshes.new(f"TOWER_TOP_STAIRS_{wall_id:03d}_{idx:03d}_mesh")
+        bm = bmesh.new()
+
+        def add_top_run(inner_x, x_dir):
+            profile = [(access_len, 0.0), (0.0, 0.0), (0.0, rise)]
+            for level in range(stair_steps - 1, 0, -1):
+                z = level * step_height
+                d0 = (stair_steps - level - 1) * step_len
+                d1 = d0 + step_len
+                profile.append((d0, z))
+                profile.append((d1, z))
+            profile.append((access_len, 0.0))
+            front = [bm.verts.new((inner_x + (d * x_dir), -half_depth, s.wall_height + z)) for d, z in profile]
+            back = [bm.verts.new((inner_x + (d * x_dir), half_depth, s.wall_height + z)) for d, z in profile]
+            try:
+                bm.faces.new(front)
+            except ValueError:
+                pass
+            try:
+                bm.faces.new(tuple(reversed(back)))
+            except ValueError:
+                pass
+            for i in range(len(profile)):
+                j = (i + 1) % len(profile)
+                try:
+                    bm.faces.new((front[i], front[j], back[j], back[i]))
+                except ValueError:
+                    pass
+
+        add_top_run(-base_half_width, -1.0)
+        add_top_run(base_half_width, 1.0)
+        bm.normal_update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        stair_obj = bpy.data.objects.new(f"TOWER_TOP_STAIRS_{wall_id:03d}_{idx:03d}", mesh)
+        stair_obj[ADDON_TAG] = True
+        stair_obj[TOWER_INSTANCE_TAG] = True
+        stair_obj[WALL_ID_TAG] = wall_id
+        stair_obj.hide_render = False
+        stair_obj.hide_set(False)
+        stair_obj.data.materials.append(stair_material())
+        ensure_collection(context).objects.link(stair_obj)
+        stair_obj.matrix_world = matrix_world.copy()
+        parent_keep_transform(stair_obj, wall_obj)
 
     def build_tower_mesh(tower_obj, mesh_name):
         tower_length = max(0.05, float(getattr(s, "tower_length", s.gate_length)))
@@ -1432,12 +1556,12 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         bm.to_mesh(mesh)
         bm.free()
         mesh.update()
-        return mesh
+        return mesh, tw, h
 
     for idx, tower in enumerate(towers):
         if not object_is_valid(tower) or s.tower_base_style != 'FORTIFIED':
             continue
-        mesh = build_tower_mesh(tower, f"TOWER_BASE_{wall_id:03d}_{idx:03d}_mesh")
+        mesh, tower_half_width, tower_height = build_tower_mesh(tower, f"TOWER_BASE_{wall_id:03d}_{idx:03d}_mesh")
         instance = bpy.data.objects.new(f"TOWER_BASE_{wall_id:03d}_{idx:03d}", mesh)
         instance[ADDON_TAG] = True
         instance[TOWER_INSTANCE_TAG] = True
@@ -1447,6 +1571,7 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         ensure_collection(context).objects.link(instance)
         instance.matrix_world = tower.matrix_world.copy()
         parent_keep_transform(instance, wall_obj)
+        create_top_access_stairs(idx, tower_half_width, tower_height, instance.matrix_world)
 
 
 def build_wall_mesh(scene, context=None):
