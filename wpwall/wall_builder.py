@@ -970,14 +970,14 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         bm = bmesh.new()
 
         def add_top_run(inner_x, x_dir):
-            profile = [(access_len, 0.0), (0.0, 0.0), (0.0, rise)]
-            for level in range(stair_steps - 1, 0, -1):
+            profile = [(access_len, 0.0), (0.0, 0.0)]
+            for level in range(1, stair_steps + 1):
                 z = level * step_height
-                d0 = (stair_steps - level - 1) * step_len
+                d0 = access_len - ((stair_steps - level + 1) * step_len)
                 d1 = d0 + step_len
                 profile.append((d0, z))
                 profile.append((d1, z))
-            profile.append((access_len, 0.0))
+            profile.append((0.0, rise))
 
             front = [bm.verts.new((inner_x + (d * x_dir), -half_depth, s.wall_height + z)) for d, z in profile]
             back = [bm.verts.new((inner_x + (d * x_dir), half_depth, s.wall_height + z)) for d, z in profile]
@@ -1435,14 +1435,14 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         bm = bmesh.new()
 
         def add_top_run(inner_x, x_dir):
-            profile = [(access_len, 0.0), (0.0, 0.0), (0.0, rise)]
-            for level in range(stair_steps - 1, 0, -1):
+            profile = [(access_len, 0.0), (0.0, 0.0)]
+            for level in range(1, stair_steps + 1):
                 z = level * step_height
-                d0 = (stair_steps - level - 1) * step_len
+                d0 = access_len - ((stair_steps - level + 1) * step_len)
                 d1 = d0 + step_len
                 profile.append((d0, z))
                 profile.append((d1, z))
-            profile.append((access_len, 0.0))
+            profile.append((0.0, rise))
             front = [bm.verts.new((inner_x + (d * x_dir), -half_depth, s.wall_height + z)) for d, z in profile]
             back = [bm.verts.new((inner_x + (d * x_dir), half_depth, s.wall_height + z)) for d, z in profile]
             try:
