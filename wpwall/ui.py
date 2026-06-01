@@ -93,7 +93,6 @@ def draw_main_panel(layout, context):
             if s.gate_stairs_enabled:
                 stair_col.prop(s, "gate_stair_side")
                 stair_col.prop(s, "gate_stair_length")
-                stair_col.prop(s, "gate_stair_height")
                 stair_col.prop(s, "gate_stair_depth")
                 stair_col.prop(s, "gate_stair_offset")
                 stair_col.prop(s, "gate_stair_steps")
@@ -159,7 +158,6 @@ def draw_main_panel(layout, context):
             if s.gate_stairs_enabled:
                 gcol.prop(s, "gate_stair_side")
                 gcol.prop(s, "gate_stair_length")
-                gcol.prop(s, "gate_stair_height")
                 gcol.prop(s, "gate_stair_depth")
                 gcol.prop(s, "gate_stair_offset")
                 gcol.prop(s, "gate_stair_steps")

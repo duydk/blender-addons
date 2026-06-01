@@ -1128,8 +1128,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         stair_depth = max(0.05, float(getattr(s, "gate_stair_depth", 0.6)))
         stair_offset = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
         stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
-        custom_height = float(getattr(s, "gate_stair_height", 0.0))
-        stair_height = max(0.05, custom_height if custom_height > 0.0 else s.wall_height)
+        stair_height = max(0.05, s.wall_height)
         stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
         gate_half = gate_length * 0.5
         side_gap = stair_offset
