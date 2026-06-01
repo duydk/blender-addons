@@ -69,11 +69,24 @@ def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5):
     mesh.materials.clear()
     mesh.materials.append(base_mat)
     mesh.materials.append(top_mat)
+    uv_layer = bm.loops.layers.uv.verify()
     for face in bm.faces:
+        face.smooth = False
         zs = [vert.co.z for vert in face.verts]
         elevated_flat = max(zs) > 1e-5 and (max(zs) - min(zs)) <= 1e-5
         upward = face.normal.z > top_threshold and face.calc_center_median().z > 1e-5
         face.material_index = 1 if elevated_flat or upward else 0
+
+        normal = face.normal
+        ax, ay, az = abs(normal.x), abs(normal.y), abs(normal.z)
+        for loop in face.loops:
+            co = loop.vert.co
+            if az >= ax and az >= ay:
+                loop[uv_layer].uv = (co.x, co.y)
+            elif ax >= ay:
+                loop[uv_layer].uv = (co.y, co.z)
+            else:
+                loop[uv_layer].uv = (co.x, co.z)
 
 
 def object_is_valid(obj):
