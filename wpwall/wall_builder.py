@@ -1723,6 +1723,10 @@ def build_wall_mesh(scene, context=None):
                             [ib0, ib1, it1, it0],
                             [it0, it1, ot1, ot0],
                         ])
+                    if t0 > 1e-6:
+                        face_list.append([ob0, ot0, it0, ib0] if side > 0.0 else [ob0, ib0, it0, ot0])
+                    if t1 < 1.0 - 1e-6:
+                        face_list.append([ob1, ib1, it1, ot1] if side > 0.0 else [ob1, ot1, it1, ib1])
 
             for i in range(edge_count):
                 j = (i + 1) % n
