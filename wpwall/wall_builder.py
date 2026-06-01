@@ -48,7 +48,7 @@ def _set_socket_default(node, socket_name, value):
         socket.default_value = value
 
 
-def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0):
+def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, mortar_size=0.035, bump_strength=0.08):
     mat = bpy.data.materials.get(name)
     if mat is None:
         mat = bpy.data.materials.new(name)
@@ -74,10 +74,10 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0):
     _set_socket_default(brick, "Color2", color_b)
     _set_socket_default(brick, "Mortar", mortar_color)
     _set_socket_default(brick, "Scale", scale)
-    _set_socket_default(brick, "Mortar Size", 0.035)
+    _set_socket_default(brick, "Mortar Size", mortar_size)
     _set_socket_default(brick, "Mortar Smooth", 0.12)
     _set_socket_default(bsdf, "Roughness", 0.78)
-    _set_socket_default(bump, "Strength", 0.08)
+    _set_socket_default(bump, "Strength", bump_strength)
     _set_socket_default(bump, "Distance", 0.05)
 
     if "UV" in texcoord.outputs and "Vector" in brick.inputs:
@@ -94,20 +94,27 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0):
     return mat
 
 
-def create_brick_wall_materials():
+def create_brick_wall_materials(s=None):
+    brick_scale = max(0.1, float(getattr(s, "brick_scale", 3.2))) if s else 3.2
+    mortar_size = max(0.001, float(getattr(s, "brick_mortar_size", 0.035))) if s else 0.035
+    bump_strength = max(0.0, float(getattr(s, "brick_bump_strength", 0.08))) if s else 0.08
     base = procedural_brick_material(
         "WP_Brick_Wall",
         (0.62, 0.48, 0.32, 1.0),
         (0.46, 0.35, 0.24, 1.0),
         (0.78, 0.72, 0.62, 1.0),
-        scale=3.2,
+        scale=brick_scale,
+        mortar_size=mortar_size,
+        bump_strength=bump_strength,
     )
     top = procedural_brick_material(
         "WP_Brick_Wall_Top",
         (0.70, 0.62, 0.48, 1.0),
         (0.54, 0.46, 0.34, 1.0),
         (0.82, 0.78, 0.68, 1.0),
-        scale=4.2,
+        scale=brick_scale * 1.25,
+        mortar_size=mortar_size,
+        bump_strength=bump_strength,
     )
     return base, top
 

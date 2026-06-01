@@ -31,6 +31,9 @@ class WPWallSettings(PropertyGroup):
     tower_top_material: PointerProperty(name="Tower Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     stair_material: PointerProperty(name="Stair", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     stair_top_material: PointerProperty(name="Stair Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
+    brick_scale: FloatProperty(name="Brick Scale", default=3.2, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_mortar_size: FloatProperty(name="Mortar Size", default=0.035, min=0.001, max=0.25, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_bump_strength: FloatProperty(name="Brick Bump", default=0.08, min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     tower_length: FloatProperty(name="Tower Length", default=2.0, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_base_style: EnumProperty(name="Tower Base", items=gate_base_items(), default='FORTIFIED', update=lambda self, ctx: trigger_rebuild(ctx))
     tower_base_width_mult: FloatProperty(name="Tower Base Width x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -75,6 +78,10 @@ class WPWallSettings(PropertyGroup):
 def trigger_rebuild(context):
     if context and context.scene:
         build_wall_mesh(context.scene, context)
+
+
+def update_brick_material_settings(self, context):
+    create_brick_wall_materials(self)
 
 
 def update_opening_object(self, context):
@@ -314,7 +321,7 @@ class WPWALL_OT_apply_brick_material(Operator):
 
     def execute(self, context):
         s = context.scene.wp_wall_settings
-        base_mat, top_mat = create_brick_wall_materials()
+        base_mat, top_mat = create_brick_wall_materials(s)
         s.wall_material = base_mat
         s.gate_material = base_mat
         s.tower_material = base_mat
