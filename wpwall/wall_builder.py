@@ -1013,6 +1013,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         side_gap = stair_offset
         step_len = stair_length / stair_steps
         step_height = stair_height / stair_steps
+        top_step_width_mult = max(1.0, float(getattr(s, "gate_stair_top_step_width_mult", 5.0)))
         face_dirs = []
         if stair_side in {'INSIDE', 'BOTH'}:
             face_dirs.append(1.0)
@@ -1023,7 +1024,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         bm = bmesh.new()
 
         def add_stair_run(inner_x, x_dir, y0, y1):
-            landing_len = step_len * 5.0
+            landing_len = step_len * top_step_width_mult
             total_len = landing_len + (max(0, stair_steps - 1) * step_len)
             profile = [(total_len, 0.0), (0.0, 0.0), (0.0, stair_height), (landing_len, stair_height)]
             for level in range(stair_steps - 1, 0, -1):
@@ -1626,7 +1627,8 @@ def build_wall_mesh(scene, context=None):
                 stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
                 stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
                 side_gap = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
-                top_step_len = (stair_length / stair_steps) * 5.0
+                top_step_width_mult = max(1.0, float(getattr(s, "gate_stair_top_step_width_mult", 5.0)))
+                top_step_len = (stair_length / stair_steps) * top_step_width_mult
                 stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
                 stair_sides = []
                 if stair_side in {'INSIDE', 'BOTH'}:

@@ -45,6 +45,7 @@ class WPWallSettings(PropertyGroup):
     gate_stair_depth: FloatProperty(name="Ground Stair Depth", default=0.6, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_offset: FloatProperty(name="Ground Stair Offset", default=0.05, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_steps: IntProperty(name="Ground Stair Steps", default=7, min=1, max=64, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_stair_top_step_width_mult: FloatProperty(name="Ground Top Step Width x", default=5.0, min=1.0, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_wall_stairs_enabled: BoolProperty(name="Gate Wall Stair", default=True, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_wall_stair_length: FloatProperty(name="Wall Stair Length", default=1.6, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_wall_stair_depth: FloatProperty(name="Wall Stair Depth", default=0.6, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
