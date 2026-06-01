@@ -1668,7 +1668,7 @@ def build_wall_mesh(scene, context=None):
                         return True
                 return False
 
-            def stair_clearance_open_t_ranges(seg_idx, side, seg_len):
+            def stair_clearance_blocked_t_ranges(seg_idx, side, seg_len):
                 if seg_len <= 1e-6:
                     return []
                 blocked = []
@@ -1678,8 +1678,6 @@ def build_wall_mesh(scene, context=None):
                             _clamp(clear_start / seg_len, 0.0, 1.0),
                             _clamp(clear_end / seg_len, 0.0, 1.0),
                         ))
-                if not blocked:
-                    return [(0.0, 1.0)]
                 blocked.sort()
                 merged = []
                 for start, end in blocked:
@@ -1689,10 +1687,15 @@ def build_wall_mesh(scene, context=None):
                         merged.append([start, end])
                     else:
                         merged[-1][1] = max(merged[-1][1], end)
+                return [(start, end) for start, end in merged]
 
+            def stair_clearance_open_t_ranges(seg_idx, side, seg_len):
+                blocked = stair_clearance_blocked_t_ranges(seg_idx, side, seg_len)
+                if not blocked:
+                    return [(0.0, 1.0)]
                 open_ranges = []
                 cursor = 0.0
-                for start, end in merged:
+                for start, end in blocked:
                     if start > cursor + 1e-6:
                         open_ranges.append((cursor, start))
                     cursor = max(cursor, end)
@@ -1702,6 +1705,13 @@ def build_wall_mesh(scene, context=None):
 
             def add_split_parapet_faces(face_list, seg_idx, side, outer_base0, outer_base1, inner_base0, inner_base1, outer_top0, outer_top1, inner_top0, inner_top1):
                 seg_len = (points[(seg_idx + 1) % n] - points[seg_idx]).length
+                for t0, t1 in stair_clearance_blocked_t_ranges(seg_idx, side, seg_len):
+                    ob0 = bm.verts.new(outer_base0.co.lerp(outer_base1.co, t0))
+                    ob1 = bm.verts.new(outer_base0.co.lerp(outer_base1.co, t1))
+                    ib0 = bm.verts.new(inner_base0.co.lerp(inner_base1.co, t0))
+                    ib1 = bm.verts.new(inner_base0.co.lerp(inner_base1.co, t1))
+                    face_list.append([ob0, ib0, ib1, ob1] if side > 0.0 else [ob0, ob1, ib1, ib0])
+
                 for t0, t1 in stair_clearance_open_t_ranges(seg_idx, side, seg_len):
                     ob0 = bm.verts.new(outer_base0.co.lerp(outer_base1.co, t0))
                     ob1 = bm.verts.new(outer_base0.co.lerp(outer_base1.co, t1))
