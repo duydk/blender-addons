@@ -48,6 +48,7 @@ def draw_main_panel(layout, context):
     mat_box = layout.box()
     mat_box.label(text="Materials")
     mcol = mat_box.column(align=True)
+    mcol.operator("wpwall.apply_brick_material", icon='MATERIAL')
     mcol.prop(s, "wall_material")
     mcol.prop(s, "wall_top_material")
     mcol.prop(s, "gate_material")

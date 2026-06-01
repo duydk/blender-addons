@@ -42,6 +42,76 @@ def default_material(key):
     return mat
 
 
+def _set_socket_default(node, socket_name, value):
+    socket = node.inputs.get(socket_name)
+    if socket is not None:
+        socket.default_value = value
+
+
+def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0):
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name)
+    mat.diffuse_color = color_a
+    mat.use_nodes = True
+
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    output.location = (520, 0)
+    bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+    bsdf.location = (260, 0)
+    brick = nodes.new(type='ShaderNodeTexBrick')
+    brick.location = (-220, 80)
+    texcoord = nodes.new(type='ShaderNodeTexCoord')
+    texcoord.location = (-460, 80)
+    bump = nodes.new(type='ShaderNodeBump')
+    bump.location = (20, -180)
+
+    _set_socket_default(brick, "Color1", color_a)
+    _set_socket_default(brick, "Color2", color_b)
+    _set_socket_default(brick, "Mortar", mortar_color)
+    _set_socket_default(brick, "Scale", scale)
+    _set_socket_default(brick, "Mortar Size", 0.035)
+    _set_socket_default(brick, "Mortar Smooth", 0.12)
+    _set_socket_default(bsdf, "Roughness", 0.78)
+    _set_socket_default(bump, "Strength", 0.08)
+    _set_socket_default(bump, "Distance", 0.05)
+
+    if "UV" in texcoord.outputs and "Vector" in brick.inputs:
+        links.new(texcoord.outputs["UV"], brick.inputs["Vector"])
+    if "Color" in brick.outputs and "Base Color" in bsdf.inputs:
+        links.new(brick.outputs["Color"], bsdf.inputs["Base Color"])
+    if "Fac" in brick.outputs and "Height" in bump.inputs:
+        links.new(brick.outputs["Fac"], bump.inputs["Height"])
+    if "Normal" in bump.outputs and "Normal" in bsdf.inputs:
+        links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    if "BSDF" in bsdf.outputs and "Surface" in output.inputs:
+        links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+
+    return mat
+
+
+def create_brick_wall_materials():
+    base = procedural_brick_material(
+        "WP_Brick_Wall",
+        (0.62, 0.48, 0.32, 1.0),
+        (0.46, 0.35, 0.24, 1.0),
+        (0.78, 0.72, 0.62, 1.0),
+        scale=3.2,
+    )
+    top = procedural_brick_material(
+        "WP_Brick_Wall_Top",
+        (0.70, 0.62, 0.48, 1.0),
+        (0.54, 0.46, 0.34, 1.0),
+        (0.82, 0.78, 0.68, 1.0),
+        scale=4.2,
+    )
+    return base, top
+
+
 def setting_material(s, attr_name, fallback_key):
     mat = getattr(s, attr_name, None)
     return mat if mat is not None else default_material(fallback_key)

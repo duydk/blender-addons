@@ -307,6 +307,27 @@ class WPWALL_OT_select_next_waypoint(Operator):
         return {'FINISHED'}
 
 
+class WPWALL_OT_apply_brick_material(Operator):
+    bl_idname = "wpwall.apply_brick_material"
+    bl_label = "Use Brick Wall Material"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        s = context.scene.wp_wall_settings
+        base_mat, top_mat = create_brick_wall_materials()
+        s.wall_material = base_mat
+        s.gate_material = base_mat
+        s.tower_material = base_mat
+        s.stair_material = base_mat
+        s.wall_top_material = top_mat
+        s.gate_top_material = top_mat
+        s.tower_top_material = top_mat
+        s.stair_top_material = top_mat
+        build_wall_mesh(context.scene, context)
+        self.report({'INFO'}, "Applied brick wall material")
+        return {'FINISHED'}
+
+
 class WPWALL_OT_new_wall(Operator):
     bl_idname = "wpwall.new_wall"
     bl_label = "New Wall"
