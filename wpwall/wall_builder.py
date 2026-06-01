@@ -125,6 +125,19 @@ def create_brick_wall_materials(s=None):
     return base, top
 
 
+def brick_line_material():
+    mat = bpy.data.materials.get("WP_Brick_Mortar_Lines")
+    if mat is None:
+        mat = bpy.data.materials.new("WP_Brick_Mortar_Lines")
+        mat.diffuse_color = (0.20, 0.17, 0.13, 1.0)
+    return mat
+
+
+def using_brick_material(s):
+    mat = getattr(s, "wall_material", None)
+    return mat is not None and mat.name.startswith("WP_Brick_Wall")
+
+
 def setting_material(s, attr_name, fallback_key):
     mat = getattr(s, attr_name, None)
     return mat if mat is not None else default_material(fallback_key)
@@ -147,14 +160,18 @@ def material_pair(s, base_attr, top_attr, base_key, top_key):
     return base_mat, top_mat
 
 
-def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5):
+def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5, accent_mat=None):
     bm.normal_update()
     mesh.materials.clear()
     mesh.materials.append(base_mat)
     mesh.materials.append(top_mat)
+    if accent_mat is not None:
+        mesh.materials.append(accent_mat)
     uv_layer = bm.loops.layers.uv.verify()
     for face in bm.faces:
         face.smooth = False
+        if accent_mat is not None and face.material_index == 2:
+            continue
         zs = [vert.co.z for vert in face.verts]
         elevated_flat = max(zs) > 1e-5 and (max(zs) - min(zs)) <= 1e-5
         upward = face.normal.z > top_threshold and face.calc_center_median().z > 1e-5
@@ -1666,6 +1683,52 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         create_top_access_stairs(idx, tower_half_width, tower_height, instance.matrix_world)
 
 
+def add_brick_line_faces(bm, a, b, outward, wall_height, brick_scale, mortar_size):
+    seg = b - a
+    seg_len = seg.length
+    if seg_len <= 1e-6 or wall_height <= 1e-6:
+        return
+    tangent = seg.normalized()
+    outward = outward.normalized() if outward.length > 1e-6 else Vector((0.0, 1.0, 0.0))
+    lift = outward * 0.006
+    brick_h = max(0.12, 1.0 / max(0.1, brick_scale) * 1.6)
+    brick_w = brick_h * 2.4
+    line_h = _clamp(mortar_size * 0.06, 0.008, brick_h * 0.35)
+    line_w = _clamp(mortar_size * 0.05, 0.006, brick_w * 0.25)
+
+    def add_quad(p0, p1, p2, p3):
+        verts = [bm.verts.new(v) for v in (p0, p1, p2, p3)]
+        try:
+            face = bm.faces.new(verts)
+        except ValueError:
+            return
+        face.material_index = 2
+
+    z = brick_h
+    while z < wall_height - 1e-6:
+        z0 = max(0.0, z - line_h * 0.5)
+        z1 = min(wall_height, z + line_h * 0.5)
+        add_quad(a + lift + Vector((0.0, 0.0, z0)), b + lift + Vector((0.0, 0.0, z0)), b + lift + Vector((0.0, 0.0, z1)), a + lift + Vector((0.0, 0.0, z1)))
+        z += brick_h
+
+    row = 0
+    z0 = 0.0
+    while z0 < wall_height - 1e-6:
+        z1 = min(wall_height, z0 + brick_h)
+        offset = brick_w * 0.5 if row % 2 else 0.0
+        x = offset
+        while x < seg_len - 1e-6:
+            center = a + tangent * x
+            p0 = center - tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z0))
+            p1 = center + tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z0))
+            p2 = center + tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z1))
+            p3 = center - tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z1))
+            add_quad(p0, p1, p2, p3)
+            x += brick_w
+        row += 1
+        z0 += brick_h
+
+
 def build_wall_mesh(scene, context=None):
     s = settings(scene)
     ctx = context if context is not None else bpy.context
@@ -2105,6 +2168,18 @@ def build_wall_mesh(scene, context=None):
                                     pass
                             offset += step
 
+            if using_brick_material(s):
+                brick_scale = max(0.1, float(getattr(s, "brick_scale", 8.0)))
+                mortar_size = max(0.001, float(getattr(s, "brick_mortar_size", 0.035)))
+                for i in range(edge_count):
+                    j = (i + 1) % n
+                    tangent = _safe_dir_2d(points[i], points[j])
+                    if tangent is None:
+                        continue
+                    normal = Vector((-tangent.y, tangent.x, 0.0))
+                    add_brick_line_faces(bm, plus[i], plus[j], normal, s.wall_height, brick_scale, mortar_size)
+                    add_brick_line_faces(bm, minus[i], minus[j], -normal, s.wall_height, brick_scale, mortar_size)
+
     if len(points) >= 2:
         has_height_variation = any(abs(points[i].z - points[(i + 1) % len(points)].z) > 1e-5 for i in range(len(points) - (0 if closed else 1)))
         if has_height_variation:
@@ -2112,7 +2187,8 @@ def build_wall_mesh(scene, context=None):
             # Triangulating them removes the visible "twist" Blender shows on those faces.
             bmesh.ops.triangulate(bm, faces=list(bm.faces))
 
-    apply_bmesh_materials(mesh, bm, *material_pair(s, "wall_material", "wall_top_material", "wall", "wall_top"))
+    accent_mat = brick_line_material() if using_brick_material(s) else None
+    apply_bmesh_materials(mesh, bm, *material_pair(s, "wall_material", "wall_top_material", "wall", "wall_top"), accent_mat=accent_mat)
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
