@@ -1200,6 +1200,17 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         crenel_h = max(0.0, s.crenel_height)
         crenel_w = max(0.0, s.crenel_width)
         crenel_g = max(0.0, s.crenel_gap)
+        wall_clear_y = min(tt, max(0.0, s.wall_thickness * 0.5))
+
+        def exposed_y_ranges(y0, y1):
+            if wall_clear_y <= 1e-6:
+                return [(y0, y1)]
+            ranges = []
+            if y0 < -wall_clear_y - 1e-6:
+                ranges.append((y0, min(y1, -wall_clear_y)))
+            if y1 > wall_clear_y + 1e-6:
+                ranges.append((max(y0, wall_clear_y), y1))
+            return [(a, b) for a, b in ranges if b - a > 1e-6]
 
         def add_prism(x0, x1, y0, y1, z0, z1):
             verts = [
@@ -1252,8 +1263,9 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             add_prism(-tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
             add_prism(-tw, tw, tt - parapet_w, tt, h, h + parapet_h)
             # Left and right parapet rails.
-            add_prism(-tw, -tw + parapet_w, -tt, tt, h, h + parapet_h)
-            add_prism(tw - parapet_w, tw, -tt, tt, h, h + parapet_h)
+            for y0, y1 in exposed_y_ranges(-tt, tt):
+                add_prism(-tw, -tw + parapet_w, y0, y1, h, h + parapet_h)
+                add_prism(tw - parapet_w, tw, y0, y1, h, h + parapet_h)
 
             # Crenels: small raised blocks with configurable width/gap along each rail.
             if crenel_h > 1e-6 and crenel_w > 1e-6:
@@ -1275,8 +1287,9 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                     while offset_y + crenel_w <= rail_len_y + 1e-6:
                         y0 = -tt + offset_y
                         y1 = min(tt, y0 + crenel_w)
-                        add_prism(-tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
-                        add_prism(tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                        if y1 <= -wall_clear_y + 1e-6 or y0 >= wall_clear_y - 1e-6:
+                            add_prism(-tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                            add_prism(tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
                         offset_y += step
         bm.to_mesh(mesh)
         bm.free()
@@ -1355,6 +1368,17 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         bw = bottom_width * 0.5
         bt = bottom_thickness * 0.5
         h = base_height
+        wall_clear_y = min(tt, max(0.0, s.wall_thickness * 0.5))
+
+        def exposed_y_ranges(y0, y1):
+            if wall_clear_y <= 1e-6:
+                return [(y0, y1)]
+            ranges = []
+            if y0 < -wall_clear_y - 1e-6:
+                ranges.append((y0, min(y1, -wall_clear_y)))
+            if y1 > wall_clear_y + 1e-6:
+                ranges.append((max(y0, wall_clear_y), y1))
+            return [(a, b) for a, b in ranges if b - a > 1e-6]
 
         v0 = bm.verts.new((-bw, -bt, 0.0))
         v1 = bm.verts.new((bw, -bt, 0.0))
@@ -1380,8 +1404,9 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         if parapet_h > 1e-6 and parapet_w > 1e-6 and tt > parapet_w:
             add_prism(bm, -tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
             add_prism(bm, -tw, tw, tt - parapet_w, tt, h, h + parapet_h)
-            add_prism(bm, -tw, -tw + parapet_w, -tt, tt, h, h + parapet_h)
-            add_prism(bm, tw - parapet_w, tw, -tt, tt, h, h + parapet_h)
+            for y0, y1 in exposed_y_ranges(-tt, tt):
+                add_prism(bm, -tw, -tw + parapet_w, y0, y1, h, h + parapet_h)
+                add_prism(bm, tw - parapet_w, tw, y0, y1, h, h + parapet_h)
 
             if crenel_h > 1e-6 and crenel_w > 1e-6:
                 step = crenel_w + crenel_g
@@ -1398,8 +1423,9 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                     while offset_y + crenel_w <= (tt * 2.0) + 1e-6:
                         y0 = -tt + offset_y
                         y1 = min(tt, y0 + crenel_w)
-                        add_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
-                        add_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                        if y1 <= -wall_clear_y + 1e-6 or y0 >= wall_clear_y - 1e-6:
+                            add_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                            add_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
                         offset_y += step
 
         bm.normal_update()
