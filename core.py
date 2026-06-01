@@ -63,27 +63,6 @@ def register():
         max=32,
         update=lambda self, ctx: trigger_rebuild(ctx),
     )
-    bpy.types.Object.wp_wall_tower_x_offset = FloatProperty(
-        name="Tower X Offset",
-        default=0.0,
-        update=lambda self, ctx: trigger_rebuild(ctx),
-    )
-    bpy.types.Object.wp_wall_tower_y_offset = FloatProperty(
-        name="Tower Y Offset",
-        default=0.0,
-        update=lambda self, ctx: trigger_rebuild(ctx),
-    )
-    bpy.types.Object.wp_wall_tower_z_offset = FloatProperty(
-        name="Tower Z Offset",
-        default=0.0,
-        update=lambda self, ctx: trigger_rebuild(ctx),
-    )
-    bpy.types.Object.wp_wall_tower_rotation = FloatProperty(
-        name="Tower Rotation",
-        default=0.0,
-        subtype='ANGLE',
-        update=lambda self, ctx: trigger_rebuild(ctx),
-    )
     bpy.types.Object.wp_wall_opening_length = FloatProperty(
         name="Opening Length",
         default=2.0,
@@ -137,10 +116,6 @@ def unregister():
     del bpy.types.Object.wp_wall_gate_length
     del bpy.types.Object.wp_wall_opening_length
     del bpy.types.Object.wp_wall_opening_width
-    del bpy.types.Object.wp_wall_tower_rotation
-    del bpy.types.Object.wp_wall_tower_z_offset
-    del bpy.types.Object.wp_wall_tower_y_offset
-    del bpy.types.Object.wp_wall_tower_x_offset
     del bpy.types.Object.wp_wall_curve_steps
     del bpy.types.Object.wp_wall_corner_radius
     del bpy.types.Scene.wp_wall_next_id

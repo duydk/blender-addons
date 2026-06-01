@@ -1285,54 +1285,120 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
 def rebuild_tower_instances(scene, context, rig, wall_obj, waypoint_objs, local_points):
     clear_tower_instances(rig)
     s = settings(scene)
-    source = s.tower_source
-    if not object_is_valid(source) or len(local_points) < 1:
+    if get_gate_base_style(None, s.gate_base_style) != 'FORTIFIED' or len(local_points) < 1:
         return
 
     wall_id = wall_id_from_obj(rig)
-    _src_loc, src_rot, src_scale = source.matrix_world.decompose()
-    src_rot_m = src_rot.to_matrix().to_4x4()
     closed = bool(s.closed_loop and len(local_points) > 2)
+    gate_length = max(0.05, s.gate_length)
+    base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
+    base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
+    base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
+    bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
+    bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
+    parapet_h = max(0.0, s.parapet_height)
+    parapet_w = max(0.0, s.parapet_width)
+    crenel_h = max(0.0, s.crenel_height)
+    crenel_w = max(0.0, s.crenel_width)
+    crenel_g = max(0.0, s.crenel_gap)
+
+    def add_prism(bm, x0, x1, y0, y1, z0, z1):
+        verts = [
+            bm.verts.new((x0, y0, z0)),
+            bm.verts.new((x1, y0, z0)),
+            bm.verts.new((x1, y1, z0)),
+            bm.verts.new((x0, y1, z0)),
+            bm.verts.new((x0, y0, z1)),
+            bm.verts.new((x1, y0, z1)),
+            bm.verts.new((x1, y1, z1)),
+            bm.verts.new((x0, y1, z1)),
+        ]
+        for face in (
+            (verts[0], verts[1], verts[2], verts[3]),
+            (verts[4], verts[7], verts[6], verts[5]),
+            (verts[0], verts[4], verts[5], verts[1]),
+            (verts[1], verts[5], verts[6], verts[2]),
+            (verts[2], verts[6], verts[7], verts[3]),
+            (verts[3], verts[7], verts[4], verts[0]),
+        ):
+            try:
+                bm.faces.new(face)
+            except ValueError:
+                pass
+
+    def build_tower_mesh(mesh_name):
+        mesh = bpy.data.meshes.new(mesh_name)
+        bm = bmesh.new()
+        tw = base_width * 0.5
+        tt = base_thickness * 0.5
+        bw = bottom_width * 0.5
+        bt = bottom_thickness * 0.5
+        h = base_height
+
+        v0 = bm.verts.new((-bw, -bt, 0.0))
+        v1 = bm.verts.new((bw, -bt, 0.0))
+        v2 = bm.verts.new((bw, bt, 0.0))
+        v3 = bm.verts.new((-bw, bt, 0.0))
+        v4 = bm.verts.new((-tw, -tt, h))
+        v5 = bm.verts.new((tw, -tt, h))
+        v6 = bm.verts.new((tw, tt, h))
+        v7 = bm.verts.new((-tw, tt, h))
+        for face in (
+            (v0, v1, v2, v3),
+            (v4, v7, v6, v5),
+            (v0, v4, v5, v1),
+            (v1, v5, v6, v2),
+            (v2, v6, v7, v3),
+            (v3, v7, v4, v0),
+        ):
+            try:
+                bm.faces.new(face)
+            except ValueError:
+                pass
+
+        if parapet_h > 1e-6 and parapet_w > 1e-6 and tt > parapet_w:
+            add_prism(bm, -tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
+            add_prism(bm, -tw, tw, tt - parapet_w, tt, h, h + parapet_h)
+            add_prism(bm, -tw, -tw + parapet_w, -tt, tt, h, h + parapet_h)
+            add_prism(bm, tw - parapet_w, tw, -tt, tt, h, h + parapet_h)
+
+            if crenel_h > 1e-6 and crenel_w > 1e-6:
+                step = crenel_w + crenel_g
+                if step > 1e-6:
+                    offset_x = 0.0
+                    while offset_x + crenel_w <= (tw * 2.0) + 1e-6:
+                        x0 = -tw + offset_x
+                        x1 = min(tw, x0 + crenel_w)
+                        add_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h)
+                        add_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h)
+                        offset_x += step
+
+                    offset_y = 0.0
+                    while offset_y + crenel_w <= (tt * 2.0) + 1e-6:
+                        y0 = -tt + offset_y
+                        y1 = min(tt, y0 + crenel_w)
+                        add_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                        add_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                        offset_y += step
+
+        bm.normal_update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+        return mesh
 
     for idx, (point, tangent) in enumerate(tower_points_with_tangent(local_points, closed)):
-        waypoint_obj = waypoint_objs[idx] if idx < len(waypoint_objs) else None
-        local_x_offset = 0.0
-        local_y_offset = 0.0
-        local_z_offset = 0.0
-        local_rotation = 0.0
-        if object_is_valid(waypoint_obj):
-            local_x_offset = float(getattr(waypoint_obj, "wp_wall_tower_x_offset", 0.0))
-            local_y_offset = float(getattr(waypoint_obj, "wp_wall_tower_y_offset", 0.0))
-            local_z_offset = float(getattr(waypoint_obj, "wp_wall_tower_z_offset", 0.0))
-            local_rotation = float(getattr(waypoint_obj, "wp_wall_tower_rotation", 0.0))
-        local_offset = Vector((local_x_offset, local_y_offset, local_z_offset))
-        instance = source.copy()
-        if source.data:
-            instance.data = source.data
-        instance.animation_data_clear()
-        instance.name = f"TOWER_{wall_id:03d}_{idx:03d}"
+        mesh = build_tower_mesh(f"TOWER_{wall_id:03d}_{idx:03d}_mesh")
+        instance = bpy.data.objects.new(f"TOWER_{wall_id:03d}_{idx:03d}", mesh)
         instance[ADDON_TAG] = True
         instance[TOWER_INSTANCE_TAG] = True
         instance[WALL_ID_TAG] = wall_id
-        instance.display_type = source.display_type
-        instance.hide_render = source.hide_render
-        instance.hide_viewport = False
+        instance.hide_render = False
         instance.hide_set(False)
-        instance.show_bounds = source.show_bounds
-        instance.display_bounds_type = source.display_bounds_type
         ensure_collection(context).objects.link(instance)
         placement = (
             Matrix.Translation((wall_obj.matrix_world @ point))
             @ Matrix.Rotation(tangent.to_2d().angle_signed(Vector((1.0, 0.0))), 4, 'Z')
-            @ Matrix.Translation(Vector((local_offset.x, local_offset.y, s.tower_z_offset + local_offset.z)))
-            @ Matrix.Rotation(s.tower_rotation + local_rotation, 4, 'Z')
-            @ src_rot_m
-            @ Matrix.Diagonal((
-                src_scale.x * s.tower_scale,
-                src_scale.y * s.tower_scale,
-                src_scale.z * s.tower_scale,
-                1.0,
-            ))
         )
         instance.matrix_world = placement
         parent_keep_transform(instance, wall_obj)

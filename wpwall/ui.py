@@ -50,18 +50,6 @@ def draw_main_panel(layout, context):
             col.prop(active, "wp_wall_corner_radius")
             col.prop(active, "wp_wall_curve_steps")
             col.prop(s, "waypoint_display_size")
-
-            tower_box = layout.box()
-            tower_box.label(text="Tower At Waypoint")
-            col = tower_box.column(align=True)
-            col.prop(s, "tower_source")
-            col.prop(s, "tower_scale")
-            col.prop(s, "tower_z_offset")
-            col.prop(s, "tower_rotation")
-            col.prop(active, "wp_wall_tower_x_offset")
-            col.prop(active, "wp_wall_tower_y_offset")
-            col.prop(active, "wp_wall_tower_z_offset")
-            col.prop(active, "wp_wall_tower_rotation")
         elif active_is_opening:
             box = layout.box()
             box.label(text=f"Opening: {active.name}")

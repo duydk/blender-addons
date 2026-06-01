@@ -23,10 +23,6 @@ class WPWallSettings(PropertyGroup):
     wall_scale: FloatProperty(name="Wall Scale", default=1.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     wall_z_offset: FloatProperty(name="Wall Z Offset", default=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     wall_rotation: FloatProperty(name="Wall Rotation", default=0.0, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
-    tower_source: PointerProperty(name="Tower Source", type=bpy.types.Object, update=lambda self, ctx: trigger_rebuild(ctx))
-    tower_scale: FloatProperty(name="Tower Scale", default=1.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
-    tower_z_offset: FloatProperty(name="Tower Z Offset", default=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
-    tower_rotation: FloatProperty(name="Tower Rotation", default=0.0, subtype='ANGLE', update=lambda self, ctx: trigger_rebuild(ctx))
     gate_length: FloatProperty(name="Gate Length", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_length(self, ctx))
     gate_height: FloatProperty(name="Gate Height", default=2.0, min=0.05, update=lambda self, ctx: set_scene_gate_height(self, ctx))
     gate_style: EnumProperty(name="Gate Style", items=gate_style_items(), default='ARCH', update=lambda self, ctx: set_scene_gate_style(self, ctx))
@@ -341,11 +337,6 @@ class WPWALL_OT_add_waypoint(Operator):
         obj.show_in_front = True
         obj.wp_wall_corner_radius = 0.0
         obj.wp_wall_curve_steps = 6
-        obj.wp_wall_tower_x_offset = 0.0
-        obj.wp_wall_tower_y_offset = 0.0
-        obj.wp_wall_tower_z_offset = 0.0
-        obj.wp_wall_tower_rotation = 0.0
-
         if obj.name not in coll.objects:
             coll.objects.link(obj)
             if obj.name in context.scene.collection.objects:
