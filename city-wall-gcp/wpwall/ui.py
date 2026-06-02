@@ -215,6 +215,9 @@ def draw_main_panel(layout, context):
             col.prop(s, "crenel_width")
             col.prop(s, "crenel_gap")
             col.prop(s, "crenel_end_caps")
+            col.prop(s, "parapet_drain_enabled")
+            if s.parapet_drain_enabled:
+                col.prop(s, "parapet_drain_size")
             draw_wall_materials(layout, s)
             if active_is_rig:
                 gate_box = layout.box()

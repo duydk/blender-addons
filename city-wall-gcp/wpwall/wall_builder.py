@@ -17,6 +17,7 @@ GATE_TAG = "wp_wall_gate"
 TOWER_TAG = "wp_wall_tower"
 GATE_INSTANCE_TAG = "wp_wall_gate_instance"
 BASE_CUTTER_TAG = "wp_wall_base_cutter"
+DRAIN_CUTTER_TAG = "wp_wall_drain_cutter"
 
 DEFAULT_MATERIALS = {
     "wall": ("WP_Wall", (0.62, 0.62, 0.60, 1.0)),
@@ -452,6 +453,19 @@ def sorted_base_cutters(scene, rig=None):
     return items
 
 
+def sorted_drain_cutters(scene, rig=None):
+    wall_id = wall_id_from_obj(rig) if rig else None
+    items = []
+    for obj in bpy.data.objects:
+        if not obj.get(DRAIN_CUTTER_TAG):
+            continue
+        if wall_id is not None and obj.get(WALL_ID_TAG) != wall_id:
+            continue
+        items.append(obj)
+    items.sort(key=lambda item: item.name)
+    return items
+
+
 def ensure_wall_object(context):
     rig = ensure_rig_object(context)
     scene = context.scene
@@ -645,7 +659,7 @@ def bind_towers_to_wall(scene, rig, wall_obj, local_points):
 
 
 def ensure_opening_boolean(scene, context, wall_obj, rig):
-    openings = sorted_openings(scene, rig) + sorted_gates(scene, rig) + sorted_base_cutters(scene, rig)
+    openings = sorted_openings(scene, rig) + sorted_gates(scene, rig) + sorted_base_cutters(scene, rig) + sorted_drain_cutters(scene, rig)
     existing = wall_obj.modifiers.get("WP_Openings")
     if not openings:
         if existing:
@@ -1116,6 +1130,200 @@ def clear_base_cutters(rig):
                 bpy.data.meshes.remove(mesh)
 
 
+def clear_drain_cutters(rig):
+    wall_id = wall_id_from_obj(rig)
+    for obj in list(bpy.data.objects):
+        if obj.get(DRAIN_CUTTER_TAG) and obj.get(WALL_ID_TAG) == wall_id:
+            mesh = obj.data if obj.type == 'MESH' else None
+            bpy.data.objects.remove(obj, do_unlink=True)
+            if mesh is not None and mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+
+
+def _add_hidden_cube_cutter(context, wall_obj, wall_id, name, tag, matrix_world):
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+
+    obj = bpy.data.objects.new(name, mesh)
+    obj[ADDON_TAG] = True
+    obj[tag] = True
+    obj[WALL_ID_TAG] = wall_id
+    obj.display_type = 'WIRE'
+    obj.hide_render = True
+    ensure_collection(context).objects.link(obj)
+    obj.matrix_world = matrix_world
+    parent_keep_transform(obj, wall_obj)
+    obj.hide_set(True)
+    return obj
+
+
+def _collection_for_cutters(context, name):
+    coll = bpy.data.collections.get(name)
+    if coll is None:
+        coll = bpy.data.collections.new(name)
+        ensure_collection(context).children.link(coll)
+    for obj in list(coll.objects):
+        coll.objects.unlink(obj)
+    return coll
+
+
+def _apply_collection_boolean(obj, coll, name):
+    if obj is None or coll is None:
+        return
+    mod = obj.modifiers.get(name) or obj.modifiers.new(name=name, type='BOOLEAN')
+    mod.operation = 'DIFFERENCE'
+    mod.solver = 'EXACT'
+    mod.operand_type = 'COLLECTION'
+    mod.collection = coll
+
+
+def add_base_parapet_drain_holes(context, base_obj, wall_id, name_prefix, instance_tag, half_width, half_thickness, base_height, wall_clear_y=0.0):
+    s = settings(context.scene)
+    if not bool(getattr(s, "parapet_drain_enabled", True)):
+        return
+    if not object_is_valid(base_obj):
+        return
+
+    parapet_h = max(0.0, s.parapet_height)
+    parapet_w = max(0.0, s.parapet_width)
+    crenel_w = max(0.0, s.crenel_width)
+    crenel_g = max(0.0, s.crenel_gap)
+    drain_size = max(0.01, float(getattr(s, "parapet_drain_size", 0.12)))
+    if parapet_h <= drain_size * 0.6 or parapet_w <= 1e-6 or crenel_w <= 1e-6:
+        return
+
+    hole_w = min(drain_size, max(0.01, crenel_w * 0.7))
+    hole_h = min(drain_size, max(0.01, parapet_h * 0.65))
+    hole_depth = parapet_w + 0.08
+    z_center = base_height + (hole_h * 0.5)
+    rhythm = max(0.01, crenel_w + crenel_g)
+    cutters = []
+
+    def add_cutter(local_center, local_scale):
+        idx = len(cutters)
+        local_matrix = Matrix.Translation(local_center) @ Matrix.Diagonal((local_scale[0], local_scale[1], local_scale[2], 1.0))
+        cutter = _add_hidden_cube_cutter(
+            context,
+            base_obj,
+            wall_id,
+            f"DRAIN_CUT_{name_prefix}_{idx:03d}",
+            instance_tag,
+            base_obj.matrix_world @ local_matrix,
+        )
+        cutters.append(cutter)
+
+    def add_holes_along_x(x0, x1, y_center):
+        pos = x0 + (crenel_w * 0.5)
+        while pos + (hole_w * 0.5) <= x1 + 1e-6:
+            if pos - (hole_w * 0.5) >= x0 - 1e-6:
+                add_cutter(Vector((pos, y_center, z_center)), (hole_w, hole_depth, hole_h + 0.02))
+            pos += rhythm
+
+    def add_holes_along_y(y0, y1, x_center):
+        pos = y0 + (crenel_w * 0.5)
+        while pos + (hole_w * 0.5) <= y1 + 1e-6:
+            if pos - (hole_w * 0.5) >= y0 - 1e-6:
+                add_cutter(Vector((x_center, pos, z_center)), (hole_depth, hole_w, hole_h + 0.02))
+            pos += rhythm
+
+    add_holes_along_x(-half_width, half_width, -half_thickness + (parapet_w * 0.5))
+    add_holes_along_x(-half_width, half_width, half_thickness - (parapet_w * 0.5))
+
+    exposed_ranges = []
+    if wall_clear_y <= 1e-6:
+        exposed_ranges.append((-half_thickness, half_thickness))
+    else:
+        if -half_thickness < -wall_clear_y - 1e-6:
+            exposed_ranges.append((-half_thickness, min(half_thickness, -wall_clear_y)))
+        if half_thickness > wall_clear_y + 1e-6:
+            exposed_ranges.append((max(-half_thickness, wall_clear_y), half_thickness))
+
+    for y0, y1 in exposed_ranges:
+        if y1 - y0 <= hole_w + 1e-6:
+            continue
+        add_holes_along_y(y0, y1, -half_width + (parapet_w * 0.5))
+        add_holes_along_y(y0, y1, half_width - (parapet_w * 0.5))
+
+    if not cutters:
+        return
+
+    coll = _collection_for_cutters(context, f"WP_Drain_{name_prefix}")
+    for cutter in cutters:
+        if cutter.name not in coll.objects:
+            coll.objects.link(cutter)
+    _apply_collection_boolean(base_obj, coll, "WP_DrainHoles")
+
+
+def rebuild_drain_cutters(scene, context, rig, wall_obj, local_points):
+    clear_drain_cutters(rig)
+    s = settings(scene)
+    wall_id = wall_id_from_obj(rig)
+    if wall_id is None or len(local_points) < 2:
+        return
+    if not bool(getattr(s, "parapet_drain_enabled", True)):
+        return
+
+    drain_size = max(0.01, float(getattr(s, "parapet_drain_size", 0.12)))
+    if s.parapet_height <= drain_size * 0.6 or s.parapet_width <= 1e-6 or s.crenel_width <= 1e-6:
+        return
+
+    n = len(local_points)
+    closed = bool(s.closed_loop and n > 2)
+    edge_count = n if closed else n - 1
+    half = s.wall_thickness * 0.5
+    hole_w = min(drain_size, max(0.01, s.crenel_width * 0.7))
+    hole_h = min(drain_size, max(0.01, s.parapet_height * 0.65))
+    hole_depth = s.parapet_width + 0.08
+    z_center = s.wall_height + (hole_h * 0.5)
+    rhythm = max(0.01, s.crenel_width + max(0.0, s.crenel_gap))
+    start_offset = s.crenel_width * 0.5
+    cutter_idx = 0
+
+    for i in range(edge_count):
+        j = (i + 1) % n
+        a = local_points[i]
+        b = local_points[j]
+        tangent = _safe_dir_2d(a, b)
+        if tangent is None:
+            continue
+        seg_len = (b - a).length
+        if seg_len <= hole_w + 1e-6:
+            continue
+        normal = Vector((-tangent.y, tangent.x, 0.0))
+        angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
+        offset = start_offset
+        while offset + (hole_w * 0.5) <= seg_len + 1e-6:
+            if offset - (hole_w * 0.5) >= -1e-6:
+                centerline = a.lerp(b, _clamp(offset / seg_len, 0.0, 1.0))
+                for side, outward in (("P", normal), ("M", -normal)):
+                    inward = -outward
+                    center = (
+                        centerline
+                        + outward * half
+                        + inward * (s.parapet_width * 0.5)
+                        + Vector((0.0, 0.0, z_center))
+                    )
+                    local_matrix = (
+                        Matrix.Translation(center)
+                        @ Matrix.Rotation(angle, 4, 'Z')
+                        @ Matrix.Diagonal((hole_w, hole_depth, hole_h + 0.02, 1.0))
+                    )
+                    _add_hidden_cube_cutter(
+                        context,
+                        wall_obj,
+                        wall_id,
+                        f"DRAIN_CUT_{wall_id:03d}_{i:03d}_{cutter_idx:03d}_{side}",
+                        DRAIN_CUTTER_TAG,
+                        wall_obj.matrix_world @ local_matrix,
+                    )
+                cutter_idx += 1
+            offset += rhythm
+
+
 def rebuild_base_cutters(scene, context, rig, wall_obj):
     clear_base_cutters(rig)
     s = settings(scene)
@@ -1133,26 +1341,6 @@ def rebuild_base_cutters(scene, context, rig, wall_obj):
         s.wall_height,
     ) + (overcut * 2.0)
 
-    def add_cutter(name, matrix_world):
-        mesh = bpy.data.meshes.new(f"{name}_mesh")
-        bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
-        bm.to_mesh(mesh)
-        bm.free()
-        mesh.update()
-
-        obj = bpy.data.objects.new(name, mesh)
-        obj[ADDON_TAG] = True
-        obj[BASE_CUTTER_TAG] = True
-        obj[WALL_ID_TAG] = wall_id
-        obj.display_type = 'WIRE'
-        obj.hide_render = True
-        ensure_collection(context).objects.link(obj)
-        obj.matrix_world = matrix_world
-        parent_keep_transform(obj, wall_obj)
-        obj.hide_set(True)
-        return obj
-
     for idx, gate in enumerate(sorted_gates(scene, rig)):
         if not object_is_valid(gate) or get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
             continue
@@ -1169,7 +1357,7 @@ def rebuild_base_cutters(scene, context, rig, wall_obj):
             @ Matrix.Rotation(local_yaw, 4, 'Z')
             @ Matrix.Diagonal((cutter_width, cutter_thickness, cutter_height, 1.0))
         )
-        add_cutter(f"BASE_CUT_GATE_{wall_id:03d}_{idx:03d}", wall_obj.matrix_world @ local_matrix)
+        _add_hidden_cube_cutter(context, wall_obj, wall_id, f"BASE_CUT_GATE_{wall_id:03d}_{idx:03d}", BASE_CUTTER_TAG, wall_obj.matrix_world @ local_matrix)
 
     if s.tower_base_style != 'FORTIFIED':
         return
@@ -1189,7 +1377,7 @@ def rebuild_base_cutters(scene, context, rig, wall_obj):
             @ Matrix.Rotation(local_yaw, 4, 'Z')
             @ Matrix.Diagonal((cutter_width, cutter_thickness, cutter_height, 1.0))
         )
-        add_cutter(f"BASE_CUT_TOWER_{wall_id:03d}_{idx:03d}", wall_obj.matrix_world @ local_matrix)
+        _add_hidden_cube_cutter(context, wall_obj, wall_id, f"BASE_CUT_TOWER_{wall_id:03d}_{idx:03d}", BASE_CUTTER_TAG, wall_obj.matrix_world @ local_matrix)
 
 
 def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
@@ -1683,6 +1871,17 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         )
         instance.matrix_world = wall_obj.matrix_world @ placement_local
         parent_keep_transform(instance, wall_obj)
+        add_base_parapet_drain_holes(
+            context,
+            instance,
+            wall_id,
+            f"GATE_BASE_{wall_id:03d}_{idx:03d}",
+            GATE_INSTANCE_TAG,
+            tw,
+            tt,
+            h,
+            wall_clear_y,
+        )
         create_top_access_stairs("GATE_BASE", idx, tw, h, instance.matrix_world, GATE_INSTANCE_TAG)
 
         # Cut the fortified base using the same gate cutter shape so the opening passes through.
@@ -1862,6 +2061,18 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         ensure_collection(context).objects.link(instance)
         instance.matrix_world = tower.matrix_world.copy()
         parent_keep_transform(instance, wall_obj)
+        tower_half_thickness = max(0.025, s.wall_thickness * max(0.01, s.tower_base_thickness_mult) * 0.5)
+        add_base_parapet_drain_holes(
+            context,
+            instance,
+            wall_id,
+            f"TOWER_BASE_{wall_id:03d}_{idx:03d}",
+            TOWER_INSTANCE_TAG,
+            tower_half_width,
+            tower_half_thickness,
+            tower_height,
+            min(tower_half_thickness, max(0.0, s.wall_thickness * 0.5)),
+        )
         create_top_access_stairs(idx, tower_half_width, tower_height, instance.matrix_world)
 
 
@@ -2318,6 +2529,7 @@ def build_wall_mesh(scene, context=None):
     bind_openings_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     bind_gates_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     bind_towers_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
+    rebuild_drain_cutters(scene, ctx, rig, wall_obj, points if len(points) >= 2 else [])
     rebuild_base_cutters(scene, ctx, rig, wall_obj)
     ensure_opening_boolean(scene, ctx, wall_obj, rig)
 

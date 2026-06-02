@@ -17,6 +17,8 @@ class WPWallSettings(PropertyGroup):
     crenel_width: FloatProperty(name="Crenel Width", default=0.45, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     crenel_gap: FloatProperty(name="Crenel Gap", default=0.3, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     crenel_end_caps: BoolProperty(name="Crenels On Open Ends", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
+    parapet_drain_enabled: BoolProperty(name="Drain Holes", default=True, update=lambda self, ctx: trigger_rebuild(ctx))
+    parapet_drain_size: FloatProperty(name="Drain Hole Size", default=0.12, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     closed_loop: BoolProperty(name="Closed Loop", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
     auto_update: BoolProperty(name="Auto Update", default=True)
     wall_source: PointerProperty(name="Wall Source", type=bpy.types.Object, update=lambda self, ctx: trigger_rebuild(ctx))
