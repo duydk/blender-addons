@@ -59,6 +59,14 @@ def draw_tower_materials(layout, s):
     draw_material_slots(box, s, "Slots", slots)
 
 
+def draw_ground_stair_materials(layout, s):
+    box = layout.box()
+    box.label(text="Ground Stair Materials")
+    box.operator("wpwall.apply_brick_material", icon='MATERIAL', text="Apply Brick Materials")
+    draw_brick_controls(box, s, "Stair Top Brick", "brick_stair_top")
+    draw_material_slots(box, s, "Slots", ("stair_material", "stair_top_material"))
+
+
 def draw_main_panel(layout, context):
     s = context.scene.wp_wall_settings
     rig = active_rig_readonly(context)
@@ -69,6 +77,7 @@ def draw_main_panel(layout, context):
     active_is_gate = object_is_valid(active) and active.get(GATE_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_tower = object_is_valid(active) and active.get(TOWER_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_rig = object_is_valid(active) and active.get(RIG_TAG)
+    active_is_ground_stair = object_is_valid(active) and active.get(GATE_INSTANCE_TAG) and active.name.startswith("GATE_STAIRS_") and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_wall = object_is_valid(active) and (
         active_is_rig or active.get(WALL_OBJ_TAG) or active_is_waypoint or active_is_opening or active_is_gate or active_is_tower
     )
@@ -122,6 +131,19 @@ def draw_main_panel(layout, context):
             else:
                 col.prop(active, "wp_wall_opening_width", text="Opening Length")
             box.label(text="Drag it to update its position on the wall")
+        elif active_is_ground_stair:
+            box = layout.box()
+            box.label(text=f"Ground Stair: {active.name}")
+            col = box.column(align=True)
+            col.prop(s, "gate_stairs_enabled")
+            col.prop(s, "gate_stair_side")
+            col.prop(s, "gate_stair_length")
+            col.prop(s, "gate_stair_depth")
+            col.prop(s, "gate_stair_offset")
+            col.prop(s, "gate_stair_steps")
+            col.prop(s, "gate_stair_top_step_width_mult")
+            box.label(text="These settings affect all ground stairs on this wall")
+            draw_ground_stair_materials(layout, s)
         elif active_is_gate:
             box = layout.box()
             box.label(text=f"Gate: {active.name}")

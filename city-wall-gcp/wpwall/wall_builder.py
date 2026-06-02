@@ -1125,6 +1125,7 @@ def rebuild_base_cutters(scene, context, rig, wall_obj):
 
     inv = wall_obj.matrix_world.inverted_safe()
     overcut = 0.08
+    seam_overlap = max(0.02, min(0.25, s.wall_thickness * 0.08))
     cutter_height = max(
         s.wall_height + s.parapet_height + s.crenel_height,
         s.wall_height * max(0.01, s.gate_base_height_mult) + s.parapet_height + s.crenel_height,
@@ -1158,15 +1159,15 @@ def rebuild_base_cutters(scene, context, rig, wall_obj):
         gate_length = max(0.05, get_gate_length(gate, s.gate_length))
         base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
         base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
-        bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
-        bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
+        cutter_width = max(0.05, base_width - (seam_overlap * 2.0))
+        cutter_thickness = max(0.05, base_thickness - (seam_overlap * 2.0))
         local_gate_m = inv @ gate.matrix_world
         local_pos = local_gate_m.translation.copy()
         local_yaw = local_gate_m.to_euler('XYZ').z
         local_matrix = (
             Matrix.Translation(Vector((local_pos.x, local_pos.y, (cutter_height * 0.5) - overcut)))
             @ Matrix.Rotation(local_yaw, 4, 'Z')
-            @ Matrix.Diagonal((bottom_width + overcut, bottom_thickness + overcut, cutter_height, 1.0))
+            @ Matrix.Diagonal((cutter_width, cutter_thickness, cutter_height, 1.0))
         )
         add_cutter(f"BASE_CUT_GATE_{wall_id:03d}_{idx:03d}", wall_obj.matrix_world @ local_matrix)
 
@@ -1178,15 +1179,15 @@ def rebuild_base_cutters(scene, context, rig, wall_obj):
         tower_length = max(0.05, float(getattr(s, "tower_length", s.gate_length)))
         base_width = max(0.05, tower_length * max(0.01, s.tower_base_width_mult))
         base_thickness = max(0.05, s.wall_thickness * max(0.01, s.tower_base_thickness_mult))
-        bottom_width = max(0.05, base_width * max(0.01, s.tower_base_bottom_width_mult))
-        bottom_thickness = max(0.05, base_thickness * max(0.01, s.tower_base_bottom_thickness_mult))
+        cutter_width = max(0.05, base_width - (seam_overlap * 2.0))
+        cutter_thickness = max(0.05, base_thickness - (seam_overlap * 2.0))
         local_tower_m = inv @ tower.matrix_world
         local_pos = local_tower_m.translation.copy()
         local_yaw = local_tower_m.to_euler('XYZ').z
         local_matrix = (
             Matrix.Translation(Vector((local_pos.x, local_pos.y, (cutter_height * 0.5) - overcut)))
             @ Matrix.Rotation(local_yaw, 4, 'Z')
-            @ Matrix.Diagonal((bottom_width + overcut, bottom_thickness + overcut, cutter_height, 1.0))
+            @ Matrix.Diagonal((cutter_width, cutter_thickness, cutter_height, 1.0))
         )
         add_cutter(f"BASE_CUT_TOWER_{wall_id:03d}_{idx:03d}", wall_obj.matrix_world @ local_matrix)
 
