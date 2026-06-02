@@ -50,7 +50,7 @@ def _set_socket_default(node, socket_name, value):
         socket.default_value = value
 
 
-def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, mortar_size=0.035, bump_strength=0.08, rotation=0.0, color_a_percent=50.0):
+def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, mortar_size=0.035, bump_strength=0.08, rotation=0.0, color_a_percent=50.0, damage_amount=0.0, damage_scale=18.0):
     mat = bpy.data.materials.get(name)
     if mat is None:
         mat = bpy.data.materials.new(name)
@@ -73,6 +73,7 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
     texcoord.location = (-660, 80)
     bump = nodes.new(type='ShaderNodeBump')
     bump.location = (20, -180)
+    damage_amount = _clamp(float(damage_amount), 0.0, 1.0)
 
     _set_socket_default(brick, "Color1", color_a)
     _set_socket_default(brick, "Color2", color_b)
@@ -92,8 +93,41 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
         links.new(texcoord.outputs["UV"], mapping.inputs["Vector"])
     if "Vector" in mapping.outputs and "Vector" in brick.inputs:
         links.new(mapping.outputs["Vector"], brick.inputs["Vector"])
-    if "Color" in brick.outputs and "Base Color" in bsdf.inputs:
-        links.new(brick.outputs["Color"], bsdf.inputs["Base Color"])
+    color_output = brick.outputs.get("Color")
+    if damage_amount > 1e-5 and color_output is not None:
+        noise = nodes.new(type='ShaderNodeTexNoise')
+        noise.location = (-220, -170)
+        ramp = nodes.new(type='ShaderNodeValToRGB')
+        ramp.location = (0, -120)
+        hue = nodes.new(type='ShaderNodeHueSaturation')
+        hue.location = (120, 80)
+
+        _set_socket_default(noise, "Scale", max(0.1, float(damage_scale)))
+        _set_socket_default(noise, "Detail", 10.0)
+        _set_socket_default(noise, "Roughness", 0.62)
+        _set_socket_default(hue, "Value", max(0.05, 1.0 - (damage_amount * 0.65)))
+
+        if ramp.color_ramp and len(ramp.color_ramp.elements) >= 2:
+            threshold = _clamp(0.82 - (damage_amount * 0.45), 0.15, 0.95)
+            ramp.color_ramp.elements[0].position = threshold
+            ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 0.0)
+            ramp.color_ramp.elements[1].position = 1.0
+            ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+
+        if "Vector" in mapping.outputs and "Vector" in noise.inputs:
+            links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
+        if "Fac" in noise.outputs and "Fac" in ramp.inputs:
+            links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+        if "Alpha" in ramp.outputs and "Fac" in hue.inputs:
+            links.new(ramp.outputs["Alpha"], hue.inputs["Fac"])
+        elif "Color" in ramp.outputs and "Fac" in hue.inputs:
+            links.new(ramp.outputs["Color"], hue.inputs["Fac"])
+        if "Color" in hue.inputs:
+            links.new(color_output, hue.inputs["Color"])
+        if "Color" in hue.outputs and "Base Color" in bsdf.inputs:
+            links.new(hue.outputs["Color"], bsdf.inputs["Base Color"])
+    elif color_output is not None and "Base Color" in bsdf.inputs:
+        links.new(color_output, bsdf.inputs["Base Color"])
     if "Fac" in brick.outputs and "Height" in bump.inputs:
         links.new(brick.outputs["Fac"], bump.inputs["Height"])
     if "Normal" in bump.outputs and "Normal" in bsdf.inputs:
@@ -134,6 +168,8 @@ def _brick_material_from_settings(s, name, prefix, defaults):
         bump_strength=_float_setting(s, f"{prefix}_bump_strength", defaults["bump_strength"], 0.0),
         rotation=_float_setting(s, f"{prefix}_rotation", defaults["rotation"]),
         color_a_percent=_percent_setting(s, f"{prefix}_color_a_percent", defaults["color_a_percent"]),
+        damage_amount=_float_setting(s, f"{prefix}_damage_amount", defaults["damage_amount"], 0.0),
+        damage_scale=_float_setting(s, f"{prefix}_damage_scale", defaults["damage_scale"], 0.1),
     )
 
 
@@ -147,6 +183,8 @@ def create_brick_wall_materials(s=None):
         "bump_strength": 0.08,
         "rotation": 0.0,
         "color_a_percent": 50.0,
+        "damage_amount": 0.0,
+        "damage_scale": 18.0,
     }
     top_defaults = {
         "color_a": (0.66, 0.58, 0.45, 1.0),
@@ -157,6 +195,8 @@ def create_brick_wall_materials(s=None):
         "bump_strength": 0.08,
         "rotation": 0.0,
         "color_a_percent": 50.0,
+        "damage_amount": 0.0,
+        "damage_scale": 18.0,
     }
     tunnel_defaults = {
         "color_a": (0.46, 0.42, 0.35, 1.0),
@@ -167,6 +207,8 @@ def create_brick_wall_materials(s=None):
         "bump_strength": 0.08,
         "rotation": 1.57079632679,
         "color_a_percent": 50.0,
+        "damage_amount": 0.0,
+        "damage_scale": 18.0,
     }
     stair_top_defaults = {
         "color_a": (0.64, 0.56, 0.43, 1.0),
@@ -177,6 +219,8 @@ def create_brick_wall_materials(s=None):
         "bump_strength": 0.08,
         "rotation": 0.0,
         "color_a_percent": 50.0,
+        "damage_amount": 0.0,
+        "damage_scale": 18.0,
     }
     base = _brick_material_from_settings(
         s,

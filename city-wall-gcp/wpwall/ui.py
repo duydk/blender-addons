@@ -15,6 +15,8 @@ def draw_brick_controls(parent, s, label, prefix):
     col.prop(s, f"{prefix}_mortar_size")
     col.prop(s, f"{prefix}_bump_strength")
     col.prop(s, f"{prefix}_rotation")
+    col.prop(s, f"{prefix}_damage_amount")
+    col.prop(s, f"{prefix}_damage_scale")
 
 
 def draw_material_slots(parent, s, label, slot_names):
