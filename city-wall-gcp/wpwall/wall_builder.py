@@ -178,12 +178,12 @@ def create_brick_wall_materials(s=None):
         "color_a": (0.60, 0.51, 0.39, 1.0),
         "color_b": (0.52, 0.44, 0.34, 1.0),
         "mortar_color": (0.72, 0.68, 0.58, 1.0),
-        "scale": 8.0,
-        "mortar_size": 0.035,
+        "scale": 4.0,
+        "mortar_size": 0.02,
         "bump_strength": 0.08,
         "rotation": 0.0,
         "color_a_percent": 50.0,
-        "damage_amount": 0.0,
+        "damage_amount": 1.0,
         "damage_scale": 18.0,
     }
     top_defaults = {
@@ -816,6 +816,163 @@ def _append_unique(points, point, eps=1e-5):
         points.append(point)
 
 
+def add_stepped_crenel_prism(bm, x0, x1, y0, y1, z0, z1, axis='X', drain_size=0.0):
+    if x1 - x0 <= 1e-6 or y1 - y0 <= 1e-6 or z1 - z0 <= 1e-6:
+        return
+
+    z_mid = z0 + ((z1 - z0) * 0.5)
+    if axis == 'Y':
+        center = (y0 + y1) * 0.5
+        top_half = max(0.01, (y1 - y0) / 6.0)
+        span = y1 - y0
+        notch_w = min(max(0.0, drain_size), span * 0.45)
+        notch_h = min(max(0.0, drain_size), (z1 - z0) * 0.45)
+        if notch_w > 1e-6 and notch_h > 1e-6:
+            notch_left = center - (notch_w * 0.5)
+            notch_right = center + (notch_w * 0.5)
+            profile = [
+                (y0, z0),
+                (notch_left, z0),
+                (notch_left, z0 + notch_h),
+                (notch_right, z0 + notch_h),
+                (notch_right, z0),
+                (y1, z0),
+                (y1, z_mid),
+                (center + top_half, z_mid),
+                (center + top_half, z1),
+                (center - top_half, z1),
+                (center - top_half, z_mid),
+                (y0, z_mid),
+            ]
+        else:
+            profile = [
+                (y0, z0),
+                (y1, z0),
+                (y1, z_mid),
+                (center + top_half, z_mid),
+                (center + top_half, z1),
+                (center - top_half, z1),
+                (center - top_half, z_mid),
+                (y0, z_mid),
+            ]
+        front = [bm.verts.new((x0, y, z)) for y, z in profile]
+        back = [bm.verts.new((x1, y, z)) for y, z in profile]
+    else:
+        center = (x0 + x1) * 0.5
+        top_half = max(0.01, (x1 - x0) / 6.0)
+        span = x1 - x0
+        notch_w = min(max(0.0, drain_size), span * 0.45)
+        notch_h = min(max(0.0, drain_size), (z1 - z0) * 0.45)
+        if notch_w > 1e-6 and notch_h > 1e-6:
+            notch_left = center - (notch_w * 0.5)
+            notch_right = center + (notch_w * 0.5)
+            profile = [
+                (x0, z0),
+                (notch_left, z0),
+                (notch_left, z0 + notch_h),
+                (notch_right, z0 + notch_h),
+                (notch_right, z0),
+                (x1, z0),
+                (x1, z_mid),
+                (center + top_half, z_mid),
+                (center + top_half, z1),
+                (center - top_half, z1),
+                (center - top_half, z_mid),
+                (x0, z_mid),
+            ]
+        else:
+            profile = [
+                (x0, z0),
+                (x1, z0),
+                (x1, z_mid),
+                (center + top_half, z_mid),
+                (center + top_half, z1),
+                (center - top_half, z1),
+                (center - top_half, z_mid),
+                (x0, z_mid),
+            ]
+        front = [bm.verts.new((x, y0, z)) for x, z in profile]
+        back = [bm.verts.new((x, y1, z)) for x, z in profile]
+
+    for face in (front, list(reversed(back))):
+        try:
+            bm.faces.new(face)
+        except ValueError:
+            pass
+
+    for idx in range(len(profile)):
+        nxt = (idx + 1) % len(profile)
+        try:
+            bm.faces.new((front[idx], front[nxt], back[nxt], back[idx]))
+        except ValueError:
+            pass
+
+
+def crenel_drain_size(s):
+    if not bool(getattr(s, "parapet_drain_enabled", True)):
+        return 0.0
+    return max(0.0, float(getattr(s, "parapet_drain_size", 0.12)))
+
+
+def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_size=0.0):
+    if (outer1 - outer0).length <= 1e-6 or depth <= 1e-6 or height <= 1e-6:
+        return
+
+    up = Vector((0.0, 0.0, 1.0))
+    inner_offset = inward.normalized() * depth if inward.length > 1e-6 else Vector((0.0, 0.0, 0.0))
+    span = (outer1 - outer0).length
+
+    def rail_point(t, z_factor):
+        return outer0.lerp(outer1, t) + up * (height * z_factor)
+
+    notch_w = min(max(0.0, drain_size), span * 0.45)
+    notch_h = min(max(0.0, drain_size), height * 0.45)
+    if notch_w > 1e-6 and notch_h > 1e-6:
+        notch_half_t = (notch_w / span) * 0.5
+        notch_z = notch_h / height
+        profile_outer = [
+            rail_point(0.0, 0.0),
+            rail_point(0.5 - notch_half_t, 0.0),
+            rail_point(0.5 - notch_half_t, notch_z),
+            rail_point(0.5 + notch_half_t, notch_z),
+            rail_point(0.5 + notch_half_t, 0.0),
+            rail_point(1.0, 0.0),
+            rail_point(1.0, 0.5),
+            rail_point(2.0 / 3.0, 0.5),
+            rail_point(2.0 / 3.0, 1.0),
+            rail_point(1.0 / 3.0, 1.0),
+            rail_point(1.0 / 3.0, 0.5),
+            rail_point(0.0, 0.5),
+        ]
+    else:
+        profile_outer = [
+            rail_point(0.0, 0.0),
+            rail_point(1.0, 0.0),
+            rail_point(1.0, 0.5),
+            rail_point(2.0 / 3.0, 0.5),
+            rail_point(2.0 / 3.0, 1.0),
+            rail_point(1.0 / 3.0, 1.0),
+            rail_point(1.0 / 3.0, 0.5),
+            rail_point(0.0, 0.5),
+        ]
+    profile_inner = [point + inner_offset for point in profile_outer]
+
+    outer_verts = [bm.verts.new(point) for point in profile_outer]
+    inner_verts = [bm.verts.new(point) for point in profile_inner]
+    for face in (outer_verts, list(reversed(inner_verts))):
+        try:
+            bm.faces.new(face)
+        except ValueError:
+            pass
+
+    for idx in range(len(profile_outer)):
+        nxt = (idx + 1) % len(profile_outer)
+        try:
+            bm.faces.new((outer_verts[idx], outer_verts[nxt], inner_verts[nxt], inner_verts[idx]))
+        except ValueError:
+            pass
+
+
 def gate_style_items():
     return [
         ('ARCH', "Arch", "Rounded arch gate opening"),
@@ -1197,6 +1354,8 @@ def _add_hidden_cube_cutter(context, wall_obj, wall_id, name, tag, matrix_world)
     obj[tag] = True
     obj[WALL_ID_TAG] = wall_id
     obj.display_type = 'WIRE'
+    obj.hide_select = True
+    obj.hide_viewport = True
     obj.hide_render = True
     ensure_collection(context).objects.link(obj)
     obj.matrix_world = matrix_world
@@ -1227,6 +1386,9 @@ def _apply_collection_boolean(obj, coll, name):
 
 def add_base_parapet_drain_holes(context, base_obj, wall_id, name_prefix, instance_tag, half_width, half_thickness, base_height, wall_clear_y=0.0):
     s = settings(context.scene)
+    # Disabled for now: live boolean helper cubes caused visible cutter clutter
+    # and inconsistent shallow cuts on parapet tops.
+    return
     if not bool(getattr(s, "parapet_drain_enabled", True)):
         return
     if not object_is_valid(base_obj):
@@ -1243,7 +1405,8 @@ def add_base_parapet_drain_holes(context, base_obj, wall_id, name_prefix, instan
     hole_w = min(drain_size, max(0.01, crenel_w * 0.7))
     hole_h = min(drain_size, max(0.01, parapet_h * 0.65))
     hole_depth = parapet_w + 0.08
-    z_center = base_height + (hole_h * 0.5)
+    drain_lift = max(0.015, min(0.04, hole_h * 0.2))
+    z_center = base_height + drain_lift + (hole_h * 0.5)
     rhythm = max(0.01, crenel_w + crenel_g)
     cutters = []
 
@@ -1264,14 +1427,14 @@ def add_base_parapet_drain_holes(context, base_obj, wall_id, name_prefix, instan
         pos = x0 + (crenel_w * 0.5)
         while pos + (hole_w * 0.5) <= x1 + 1e-6:
             if pos - (hole_w * 0.5) >= x0 - 1e-6:
-                add_cutter(Vector((pos, y_center, z_center)), (hole_w, hole_depth, hole_h + 0.02))
+                add_cutter(Vector((pos, y_center, z_center)), (hole_w, hole_depth, hole_h))
             pos += rhythm
 
     def add_holes_along_y(y0, y1, x_center):
         pos = y0 + (crenel_w * 0.5)
         while pos + (hole_w * 0.5) <= y1 + 1e-6:
             if pos - (hole_w * 0.5) >= y0 - 1e-6:
-                add_cutter(Vector((x_center, pos, z_center)), (hole_depth, hole_w, hole_h + 0.02))
+                add_cutter(Vector((x_center, pos, z_center)), (hole_depth, hole_w, hole_h))
             pos += rhythm
 
     add_holes_along_x(-half_width, half_width, -half_thickness + (parapet_w * 0.5))
@@ -1305,6 +1468,10 @@ def add_base_parapet_drain_holes(context, base_obj, wall_id, name_prefix, instan
 def rebuild_drain_cutters(scene, context, rig, wall_obj, local_points):
     clear_drain_cutters(rig)
     s = settings(scene)
+    # Disabled for now: live boolean helper cubes caused visible cutter clutter
+    # and inconsistent shallow cuts on parapet tops. Clearing above removes
+    # previously generated drain cutters during the next rebuild.
+    return
     wall_id = wall_id_from_obj(rig)
     if wall_id is None or len(local_points) < 2:
         return
@@ -1322,7 +1489,8 @@ def rebuild_drain_cutters(scene, context, rig, wall_obj, local_points):
     hole_w = min(drain_size, max(0.01, s.crenel_width * 0.7))
     hole_h = min(drain_size, max(0.01, s.parapet_height * 0.65))
     hole_depth = s.parapet_width + 0.08
-    z_center = s.wall_height + (hole_h * 0.5)
+    drain_lift = max(0.015, min(0.04, hole_h * 0.2))
+    z_center = s.wall_height + drain_lift + (hole_h * 0.5)
     rhythm = max(0.01, s.crenel_width + max(0.0, s.crenel_gap))
     start_offset = s.crenel_width * 0.5
     cutter_idx = 0
@@ -1339,33 +1507,46 @@ def rebuild_drain_cutters(scene, context, rig, wall_obj, local_points):
             continue
         normal = Vector((-tangent.y, tangent.x, 0.0))
         angle = tangent.to_2d().angle_signed(Vector((1.0, 0.0)))
+        offsets = []
         offset = start_offset
         while offset + (hole_w * 0.5) <= seg_len + 1e-6:
             if offset - (hole_w * 0.5) >= -1e-6:
-                centerline = a.lerp(b, _clamp(offset / seg_len, 0.0, 1.0))
-                for side, outward in (("P", normal), ("M", -normal)):
-                    inward = -outward
-                    center = (
-                        centerline
-                        + outward * half
-                        + inward * (s.parapet_width * 0.5)
-                        + Vector((0.0, 0.0, z_center))
-                    )
-                    local_matrix = (
-                        Matrix.Translation(center)
-                        @ Matrix.Rotation(angle, 4, 'Z')
-                        @ Matrix.Diagonal((hole_w, hole_depth, hole_h + 0.02, 1.0))
-                    )
-                    _add_hidden_cube_cutter(
-                        context,
-                        wall_obj,
-                        wall_id,
-                        f"DRAIN_CUT_{wall_id:03d}_{i:03d}_{cutter_idx:03d}_{side}",
-                        DRAIN_CUTTER_TAG,
-                        wall_obj.matrix_world @ local_matrix,
-                    )
-                cutter_idx += 1
+                offsets.append(offset)
             offset += rhythm
+
+        # Make sure corner-adjacent sections also get drains without cutting
+        # across the walking surface. These use the same wall-face orientation
+        # as regular drains, just forced near segment starts/ends.
+        for forced_offset in (start_offset, seg_len - start_offset):
+            if forced_offset - (hole_w * 0.5) >= -1e-6 and forced_offset + (hole_w * 0.5) <= seg_len + 1e-6:
+                if not any(abs(existing - forced_offset) < hole_w for existing in offsets):
+                    offsets.append(forced_offset)
+
+        offsets.sort()
+        for drain_offset in offsets:
+            centerline = a.lerp(b, _clamp(drain_offset / seg_len, 0.0, 1.0))
+            for side, outward in (("P", normal), ("M", -normal)):
+                inward = -outward
+                center = (
+                    centerline
+                    + outward * half
+                    + inward * (s.parapet_width * 0.5)
+                    + Vector((0.0, 0.0, z_center))
+                )
+                local_matrix = (
+                    Matrix.Translation(center)
+                    @ Matrix.Rotation(angle, 4, 'Z')
+                    @ Matrix.Diagonal((hole_w, hole_depth, hole_h, 1.0))
+                )
+                _add_hidden_cube_cutter(
+                    context,
+                    wall_obj,
+                    wall_id,
+                    f"DRAIN_CUT_{wall_id:03d}_{i:03d}_{cutter_idx:03d}_{side}",
+                    DRAIN_CUTTER_TAG,
+                    wall_obj.matrix_world @ local_matrix,
+                )
+            cutter_idx += 1
 
 
 def rebuild_base_cutters(scene, context, rig, wall_obj):
@@ -1882,8 +2063,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                     while offset_x + crenel_w <= rail_len_x + 1e-6:
                         x0 = -tw + offset_x
                         x1 = min(tw, x0 + crenel_w)
-                        add_prism(x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h)
-                        add_prism(x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h)
+                        add_stepped_crenel_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
+                        add_stepped_crenel_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
                         offset_x += step
 
                     # Left/right rails (vary along Y).
@@ -1893,8 +2074,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                         y0 = -tt + offset_y
                         y1 = min(tt, y0 + crenel_w)
                         if y1 <= -wall_clear_y + 1e-6 or y0 >= wall_clear_y - 1e-6:
-                            add_prism(-tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
-                            add_prism(tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                            add_stepped_crenel_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
+                            add_stepped_crenel_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
                         offset_y += step
         apply_bmesh_materials(mesh, bm, *material_pair(s, "gate_material", "gate_top_material", "gate", "gate_top"))
         bm.to_mesh(mesh)
@@ -2073,8 +2254,8 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                     while offset_x + crenel_w <= (tw * 2.0) + 1e-6:
                         x0 = -tw + offset_x
                         x1 = min(tw, x0 + crenel_w)
-                        add_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h)
-                        add_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h)
+                        add_stepped_crenel_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
+                        add_stepped_crenel_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
                         offset_x += step
 
                     offset_y = 0.0
@@ -2082,8 +2263,8 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                         y0 = -tt + offset_y
                         y1 = min(tt, y0 + crenel_w)
                         if y1 <= -wall_clear_y + 1e-6 or y0 >= wall_clear_y - 1e-6:
-                            add_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
-                            add_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h)
+                            add_stepped_crenel_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
+                            add_stepped_crenel_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
                         offset_y += step
 
         apply_bmesh_materials(mesh, bm, *material_pair(s, "tower_material", "tower_top_material", "tower", "tower_top"))
@@ -2495,26 +2676,7 @@ def build_wall_mesh(scene, context=None):
                                 continue
                             base0 = outer_a.lerp(outer_b, t0) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
                             base1 = outer_a.lerp(outer_b, t1) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
-                            inner0 = base0 + inward * s.parapet_width
-                            inner1 = base1 + inward * s.parapet_width
-                            top0 = base0 + Vector((0.0, 0.0, s.crenel_height))
-                            top1 = base1 + Vector((0.0, 0.0, s.crenel_height))
-                            inner_top0 = inner0 + Vector((0.0, 0.0, s.crenel_height))
-                            inner_top1 = inner1 + Vector((0.0, 0.0, s.crenel_height))
-                            verts = [bm.verts.new(v) for v in (base0, base1, inner1, inner0, top0, top1, inner_top1, inner_top0)]
-                            crenel_faces = [
-                                [verts[0], verts[1], verts[2], verts[3]],
-                                [verts[4], verts[7], verts[6], verts[5]],
-                                [verts[0], verts[4], verts[5], verts[1]],
-                                [verts[3], verts[2], verts[6], verts[7]],
-                                [verts[1], verts[5], verts[6], verts[2]],
-                                [verts[0], verts[3], verts[7], verts[4]],
-                            ]
-                            for face in crenel_faces:
-                                try:
-                                    bm.faces.new(face)
-                                except ValueError:
-                                    pass
+                            add_stepped_crenel_between(bm, base0, base1, inward, s.parapet_width, s.crenel_height, drain_size=crenel_drain_size(s))
                             offset += step
 
                 if not closed and s.crenel_end_caps:
@@ -2537,26 +2699,7 @@ def build_wall_mesh(scene, context=None):
                             t1 = min(1.0, (offset + s.crenel_width) / rail_len)
                             b0 = outer_a.lerp(outer_b, t0) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
                             b1 = outer_a.lerp(outer_b, t1) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
-                            i0 = b0 + inward * s.parapet_width
-                            i1 = b1 + inward * s.parapet_width
-                            t0v = b0 + Vector((0.0, 0.0, s.crenel_height))
-                            t1v = b1 + Vector((0.0, 0.0, s.crenel_height))
-                            it0 = i0 + Vector((0.0, 0.0, s.crenel_height))
-                            it1 = i1 + Vector((0.0, 0.0, s.crenel_height))
-                            verts = [bm.verts.new(v) for v in (b0, b1, i1, i0, t0v, t1v, it1, it0)]
-                            crenel_faces = [
-                                [verts[0], verts[1], verts[2], verts[3]],
-                                [verts[4], verts[7], verts[6], verts[5]],
-                                [verts[0], verts[4], verts[5], verts[1]],
-                                [verts[3], verts[2], verts[6], verts[7]],
-                                [verts[1], verts[5], verts[6], verts[2]],
-                                [verts[0], verts[3], verts[7], verts[4]],
-                            ]
-                            for face in crenel_faces:
-                                try:
-                                    bm.faces.new(face)
-                                except ValueError:
-                                    pass
+                            add_stepped_crenel_between(bm, b0, b1, inward, s.parapet_width, s.crenel_height, drain_size=crenel_drain_size(s))
                             offset += step
 
     if len(points) >= 2:
