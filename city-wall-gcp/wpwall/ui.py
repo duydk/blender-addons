@@ -1,6 +1,64 @@
 from bpy.types import Panel
 
 from .wall_builder import *
+
+
+def draw_brick_controls(parent, s, label, prefix):
+    box = parent.box()
+    box.label(text=label)
+    col = box.column(align=True)
+    col.prop(s, f"{prefix}_color_a")
+    col.prop(s, f"{prefix}_color_b")
+    col.prop(s, f"{prefix}_color_a_percent")
+    col.prop(s, f"{prefix}_mortar_color")
+    col.prop(s, f"{prefix}_scale")
+    col.prop(s, f"{prefix}_mortar_size")
+    col.prop(s, f"{prefix}_bump_strength")
+    col.prop(s, f"{prefix}_rotation")
+
+
+def draw_material_slots(parent, s, label, slot_names):
+    box = parent.box()
+    box.label(text=label)
+    col = box.column(align=True)
+    for slot_name in slot_names:
+        col.prop(s, slot_name)
+
+
+def draw_wall_materials(layout, s):
+    box = layout.box()
+    box.label(text="Wall Materials")
+    box.operator("wpwall.apply_brick_material", icon='MATERIAL', text="Apply Brick Materials")
+    draw_brick_controls(box, s, "Face Brick", "brick")
+    draw_brick_controls(box, s, "Top Brick", "brick_top")
+    draw_material_slots(box, s, "Slots", ("wall_material", "wall_top_material"))
+
+
+def draw_gate_materials(layout, s):
+    box = layout.box()
+    box.label(text="Gate Materials")
+    box.operator("wpwall.apply_brick_material", icon='MATERIAL', text="Apply Brick Materials")
+    draw_brick_controls(box, s, "Tunnel Brick", "brick_tunnel")
+    if s.gate_stairs_enabled or s.gate_wall_stairs_enabled:
+        draw_brick_controls(box, s, "Stair Top Brick", "brick_stair_top")
+    slots = ["gate_material", "gate_top_material", "gate_tunnel_material", "gate_tunnel_top_material"]
+    if s.gate_stairs_enabled or s.gate_wall_stairs_enabled:
+        slots.extend(["stair_material", "stair_top_material"])
+    draw_material_slots(box, s, "Slots", slots)
+
+
+def draw_tower_materials(layout, s):
+    box = layout.box()
+    box.label(text="Tower Materials")
+    box.operator("wpwall.apply_brick_material", icon='MATERIAL', text="Apply Brick Materials")
+    if s.tower_wall_stairs_enabled:
+        draw_brick_controls(box, s, "Stair Top Brick", "brick_stair_top")
+    slots = ["tower_material", "tower_top_material"]
+    if s.tower_wall_stairs_enabled:
+        slots.extend(["stair_material", "stair_top_material"])
+    draw_material_slots(box, s, "Slots", slots)
+
+
 def draw_main_panel(layout, context):
     s = context.scene.wp_wall_settings
     rig = active_rig_readonly(context)
@@ -10,8 +68,9 @@ def draw_main_panel(layout, context):
     active_is_opening = object_is_valid(active) and active.get(OPENING_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_gate = object_is_valid(active) and active.get(GATE_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
     active_is_tower = object_is_valid(active) and active.get(TOWER_TAG) and (wall_id is None or active.get(WALL_ID_TAG) == wall_id)
+    active_is_rig = object_is_valid(active) and active.get(RIG_TAG)
     active_is_wall = object_is_valid(active) and (
-        active.get(RIG_TAG) or active.get(WALL_OBJ_TAG) or active_is_waypoint or active_is_opening or active_is_gate or active_is_tower
+        active_is_rig or active.get(WALL_OBJ_TAG) or active_is_waypoint or active_is_opening or active_is_gate or active_is_tower
     )
 
     toolbar = layout.column(align=True)
@@ -44,22 +103,6 @@ def draw_main_panel(layout, context):
         status.label(text=f"Openings: {len(sorted_openings(context.scene, rig))}")
         status.label(text=f"Gates: {len(sorted_gates(context.scene, rig))}")
         status.label(text=f"Towers: {len(sorted_towers(context.scene, rig))}")
-
-    mat_box = layout.box()
-    mat_box.label(text="Materials")
-    mcol = mat_box.column(align=True)
-    mcol.operator("wpwall.apply_brick_material", icon='MATERIAL')
-    mcol.prop(s, "brick_scale")
-    mcol.prop(s, "brick_mortar_size")
-    mcol.prop(s, "brick_bump_strength")
-    mcol.prop(s, "wall_material")
-    mcol.prop(s, "wall_top_material")
-    mcol.prop(s, "gate_material")
-    mcol.prop(s, "gate_top_material")
-    mcol.prop(s, "tower_material")
-    mcol.prop(s, "tower_top_material")
-    mcol.prop(s, "stair_material")
-    mcol.prop(s, "stair_top_material")
 
     layout.separator()
     try:
@@ -115,6 +158,7 @@ def draw_main_panel(layout, context):
                 base_col.prop(s, "gate_base_bottom_width_mult")
                 base_col.prop(s, "gate_base_bottom_thickness_mult")
             box.label(text="Drag it to update its position on the wall")
+            draw_gate_materials(layout, s)
         elif active_is_tower:
             box = layout.box()
             box.label(text=f"Tower: {active.name}")
@@ -136,6 +180,7 @@ def draw_main_panel(layout, context):
                     stair_col.prop(s, "tower_wall_stair_depth")
                     stair_col.prop(s, "tower_wall_stair_steps")
             box.label(text="Drag it to update its position on the wall")
+            draw_tower_materials(layout, s)
         elif active_is_wall or object_is_valid(rig):
             box = layout.box()
             box.label(text="Wall")
@@ -148,50 +193,52 @@ def draw_main_panel(layout, context):
             col.prop(s, "crenel_width")
             col.prop(s, "crenel_gap")
             col.prop(s, "crenel_end_caps")
-            gate_box = layout.box()
-            gate_box.label(text="Gate Defaults")
-            gcol = gate_box.column(align=True)
-            gcol.prop(s, "gate_style")
-            gcol.prop(s, "gate_base_style")
-            gcol.prop(s, "gate_tunnel_width")
-            gcol.prop(s, "gate_tunnel_height")
-            gcol.prop(s, "gate_tunnel_thickness")
-            gcol.prop(s, "gate_tunnel_z_offset")
-            gcol.prop(s, "gate_stairs_enabled")
-            if s.gate_stairs_enabled:
-                gcol.prop(s, "gate_stair_side")
-                gcol.prop(s, "gate_stair_length")
-                gcol.prop(s, "gate_stair_depth")
-                gcol.prop(s, "gate_stair_offset")
-                gcol.prop(s, "gate_stair_steps")
-                gcol.prop(s, "gate_stair_top_step_width_mult")
-            gcol.prop(s, "gate_wall_stairs_enabled")
-            if s.gate_wall_stairs_enabled:
-                gcol.prop(s, "gate_wall_stair_length")
-                gcol.prop(s, "gate_wall_stair_depth")
-                gcol.prop(s, "gate_wall_stair_steps")
-            if s.gate_base_style == 'FORTIFIED':
-                gcol.prop(s, "gate_base_width_mult")
-                gcol.prop(s, "gate_base_thickness_mult")
-                gcol.prop(s, "gate_base_height_mult")
-                gcol.prop(s, "gate_base_bottom_width_mult")
-                gcol.prop(s, "gate_base_bottom_thickness_mult")
-            tower_box = layout.box()
-            tower_box.label(text="Tower Defaults")
-            tcol = tower_box.column(align=True)
-            tcol.prop(s, "tower_base_style")
-            tcol.prop(s, "tower_length")
-            if s.tower_base_style == 'FORTIFIED':
-                tcol.prop(s, "tower_base_width_mult")
-                tcol.prop(s, "tower_base_thickness_mult")
-                tcol.prop(s, "tower_base_height_mult")
-                tcol.prop(s, "tower_base_bottom_width_mult")
-                tcol.prop(s, "tower_base_bottom_thickness_mult")
-                tcol.prop(s, "tower_wall_stairs_enabled")
-                if s.tower_wall_stairs_enabled:
-                    tcol.prop(s, "tower_wall_stair_length")
-                    tcol.prop(s, "tower_wall_stair_depth")
-                    tcol.prop(s, "tower_wall_stair_steps")
+            draw_wall_materials(layout, s)
+            if active_is_rig:
+                gate_box = layout.box()
+                gate_box.label(text="Gate Defaults")
+                gcol = gate_box.column(align=True)
+                gcol.prop(s, "gate_style")
+                gcol.prop(s, "gate_base_style")
+                gcol.prop(s, "gate_tunnel_width")
+                gcol.prop(s, "gate_tunnel_height")
+                gcol.prop(s, "gate_tunnel_thickness")
+                gcol.prop(s, "gate_tunnel_z_offset")
+                gcol.prop(s, "gate_stairs_enabled")
+                if s.gate_stairs_enabled:
+                    gcol.prop(s, "gate_stair_side")
+                    gcol.prop(s, "gate_stair_length")
+                    gcol.prop(s, "gate_stair_depth")
+                    gcol.prop(s, "gate_stair_offset")
+                    gcol.prop(s, "gate_stair_steps")
+                    gcol.prop(s, "gate_stair_top_step_width_mult")
+                gcol.prop(s, "gate_wall_stairs_enabled")
+                if s.gate_wall_stairs_enabled:
+                    gcol.prop(s, "gate_wall_stair_length")
+                    gcol.prop(s, "gate_wall_stair_depth")
+                    gcol.prop(s, "gate_wall_stair_steps")
+                if s.gate_base_style == 'FORTIFIED':
+                    gcol.prop(s, "gate_base_width_mult")
+                    gcol.prop(s, "gate_base_thickness_mult")
+                    gcol.prop(s, "gate_base_height_mult")
+                    gcol.prop(s, "gate_base_bottom_width_mult")
+                    gcol.prop(s, "gate_base_bottom_thickness_mult")
+                tower_box = layout.box()
+                tower_box.label(text="Tower Defaults")
+                tcol = tower_box.column(align=True)
+                tcol.prop(s, "tower_base_style")
+                tcol.prop(s, "tower_length")
+                if s.tower_base_style == 'FORTIFIED':
+                    tcol.prop(s, "tower_base_width_mult")
+                    tcol.prop(s, "tower_base_thickness_mult")
+                    tcol.prop(s, "tower_base_height_mult")
+                    tcol.prop(s, "tower_base_bottom_width_mult")
+                    tcol.prop(s, "tower_base_bottom_thickness_mult")
+                    tcol.prop(s, "tower_wall_stairs_enabled")
+                    if s.tower_wall_stairs_enabled:
+                        tcol.prop(s, "tower_wall_stair_length")
+                        tcol.prop(s, "tower_wall_stair_depth")
+                        tcol.prop(s, "tower_wall_stair_steps")
         else:
             hint = layout.box()
             hint.label(text="Select a wall part to edit its settings")

@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, IntProperty, PointerProperty
 from bpy.types import Operator, PropertyGroup
 
 from .wall_builder import *
@@ -10,7 +10,7 @@ class WPWallWaypointRef(PropertyGroup):
 
 class WPWallSettings(PropertyGroup):
     wall_height: FloatProperty(name="Height", default=2.5, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
-    wall_thickness: FloatProperty(name="Wall Width", default=0.2, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    wall_thickness: FloatProperty(name="Wall Width", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     parapet_height: FloatProperty(name="Parapet Height", default=0.8, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     parapet_width: FloatProperty(name="Parapet Width", default=0.18, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     crenel_height: FloatProperty(name="Crenel Height", default=0.35, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -27,6 +27,8 @@ class WPWallSettings(PropertyGroup):
     wall_top_material: PointerProperty(name="Wall Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_material: PointerProperty(name="Gate", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_top_material: PointerProperty(name="Gate Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_tunnel_material: PointerProperty(name="Tunnel", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_tunnel_top_material: PointerProperty(name="Tunnel Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_material: PointerProperty(name="Tower", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_top_material: PointerProperty(name="Tower Top", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
     stair_material: PointerProperty(name="Stair", type=bpy.types.Material, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -34,6 +36,35 @@ class WPWallSettings(PropertyGroup):
     brick_scale: FloatProperty(name="Brick Scale", default=8.0, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     brick_mortar_size: FloatProperty(name="Mortar Size", default=0.035, min=0.001, max=0.25, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     brick_bump_strength: FloatProperty(name="Brick Bump", default=0.08, min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_rotation: FloatProperty(name="Brick Direction", default=0.0, subtype='ANGLE', update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_color_a: FloatVectorProperty(name="Brick Color 1", subtype='COLOR', size=4, default=(0.60, 0.51, 0.39, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_color_b: FloatVectorProperty(name="Brick Color 2", subtype='COLOR', size=4, default=(0.52, 0.44, 0.34, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_color_a_percent: FloatProperty(name="Color 1 %", default=50.0, min=0.0, max=100.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_mortar_color: FloatVectorProperty(name="Mortar Color", subtype='COLOR', size=4, default=(0.72, 0.68, 0.58, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_scale: FloatProperty(name="Top Brick Scale", default=10.0, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_mortar_size: FloatProperty(name="Top Mortar Size", default=0.035, min=0.001, max=0.25, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_bump_strength: FloatProperty(name="Top Brick Bump", default=0.08, min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_rotation: FloatProperty(name="Top Brick Direction", default=0.0, subtype='ANGLE', update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_color_a: FloatVectorProperty(name="Top Brick Color 1", subtype='COLOR', size=4, default=(0.66, 0.58, 0.45, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_color_b: FloatVectorProperty(name="Top Brick Color 2", subtype='COLOR', size=4, default=(0.58, 0.50, 0.39, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_color_a_percent: FloatProperty(name="Top Color 1 %", default=50.0, min=0.0, max=100.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_top_mortar_color: FloatVectorProperty(name="Top Mortar Color", subtype='COLOR', size=4, default=(0.76, 0.72, 0.62, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_scale: FloatProperty(name="Tunnel Brick Scale", default=7.0, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_mortar_size: FloatProperty(name="Tunnel Mortar Size", default=0.03, min=0.001, max=0.25, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_bump_strength: FloatProperty(name="Tunnel Brick Bump", default=0.08, min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_rotation: FloatProperty(name="Tunnel Brick Direction", default=1.57079632679, subtype='ANGLE', update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_color_a: FloatVectorProperty(name="Tunnel Brick Color 1", subtype='COLOR', size=4, default=(0.46, 0.42, 0.35, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_color_b: FloatVectorProperty(name="Tunnel Brick Color 2", subtype='COLOR', size=4, default=(0.38, 0.35, 0.30, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_color_a_percent: FloatProperty(name="Tunnel Color 1 %", default=50.0, min=0.0, max=100.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_tunnel_mortar_color: FloatVectorProperty(name="Tunnel Mortar Color", subtype='COLOR', size=4, default=(0.62, 0.58, 0.50, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_scale: FloatProperty(name="Stair Top Brick Scale", default=9.0, min=0.1, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_mortar_size: FloatProperty(name="Stair Top Mortar Size", default=0.035, min=0.001, max=0.25, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_bump_strength: FloatProperty(name="Stair Top Brick Bump", default=0.08, min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_rotation: FloatProperty(name="Stair Top Brick Direction", default=0.0, subtype='ANGLE', update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_color_a: FloatVectorProperty(name="Stair Top Brick Color 1", subtype='COLOR', size=4, default=(0.64, 0.56, 0.43, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_color_b: FloatVectorProperty(name="Stair Top Brick Color 2", subtype='COLOR', size=4, default=(0.56, 0.48, 0.37, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_color_a_percent: FloatProperty(name="Stair Top Color 1 %", default=50.0, min=0.0, max=100.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
+    brick_stair_top_mortar_color: FloatVectorProperty(name="Stair Top Mortar Color", subtype='COLOR', size=4, default=(0.74, 0.70, 0.60, 1.0), min=0.0, max=1.0, update=lambda self, ctx: update_brick_material_settings(self, ctx))
     tower_length: FloatProperty(name="Tower Length", default=2.0, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_base_style: EnumProperty(name="Tower Base", items=gate_base_items(), default='FORTIFIED', update=lambda self, ctx: trigger_rebuild(ctx))
     tower_base_width_mult: FloatProperty(name="Tower Base Width x", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -49,7 +80,7 @@ class WPWallSettings(PropertyGroup):
     gate_tunnel_height: FloatProperty(name="Tunnel Height", default=0.94, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_thickness: FloatProperty(name="Tunnel Thickness", default=0.14, min=0.01, max=0.45, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_z_offset: FloatProperty(name="Tunnel Z Offset", default=0.03, update=lambda self, ctx: trigger_rebuild(ctx))
-    gate_stairs_enabled: BoolProperty(name="Ground Stair", default=True, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_stairs_enabled: BoolProperty(name="Ground Stair", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_side: EnumProperty(name="Ground Stair Side", items=gate_stair_side_items(), default='INSIDE', update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_length: FloatProperty(name="Ground Stair Length", default=1.6, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_height: FloatProperty(name="Ground Stair Height", default=0.0, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -321,15 +352,17 @@ class WPWALL_OT_apply_brick_material(Operator):
 
     def execute(self, context):
         s = context.scene.wp_wall_settings
-        base_mat, top_mat = create_brick_wall_materials(s)
-        s.wall_material = base_mat
-        s.gate_material = base_mat
-        s.tower_material = base_mat
-        s.stair_material = base_mat
-        s.wall_top_material = top_mat
-        s.gate_top_material = top_mat
-        s.tower_top_material = top_mat
-        s.stair_top_material = top_mat
+        mats = create_brick_wall_materials(s)
+        s.wall_material = mats["wall"]
+        s.gate_material = mats["wall"]
+        s.tower_material = mats["wall"]
+        s.stair_material = mats["wall"]
+        s.wall_top_material = mats["wall_top"]
+        s.gate_top_material = mats["wall_top"]
+        s.tower_top_material = mats["wall_top"]
+        s.stair_top_material = mats["stair_top"]
+        s.gate_tunnel_material = mats["tunnel"]
+        s.gate_tunnel_top_material = mats["tunnel_top"]
         build_wall_mesh(context.scene, context)
         self.report({'INFO'}, "Applied brick wall material")
         return {'FINISHED'}

@@ -16,6 +16,7 @@ OPENING_TAG = "wp_wall_opening"
 GATE_TAG = "wp_wall_gate"
 TOWER_TAG = "wp_wall_tower"
 GATE_INSTANCE_TAG = "wp_wall_gate_instance"
+BASE_CUTTER_TAG = "wp_wall_base_cutter"
 
 DEFAULT_MATERIALS = {
     "wall": ("WP_Wall", (0.62, 0.62, 0.60, 1.0)),
@@ -48,7 +49,7 @@ def _set_socket_default(node, socket_name, value):
         socket.default_value = value
 
 
-def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, mortar_size=0.035, bump_strength=0.08):
+def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, mortar_size=0.035, bump_strength=0.08, rotation=0.0, color_a_percent=50.0):
     mat = bpy.data.materials.get(name)
     if mat is None:
         mat = bpy.data.materials.new(name)
@@ -78,8 +79,10 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
     _set_socket_default(brick, "Scale", scale)
     _set_socket_default(brick, "Mortar Size", mortar_size)
     _set_socket_default(brick, "Mortar Smooth", 0.02)
+    _set_socket_default(brick, "Bias", (color_a_percent - 50.0) / 50.0)
     _set_socket_default(brick, "Brick Width", 0.55)
     _set_socket_default(brick, "Row Height", 0.23)
+    _set_socket_default(mapping, "Rotation", (0.0, 0.0, rotation))
     _set_socket_default(bsdf, "Roughness", 0.78)
     _set_socket_default(bump, "Strength", bump_strength)
     _set_socket_default(bump, "Distance", 0.05)
@@ -100,37 +103,117 @@ def procedural_brick_material(name, color_a, color_b, mortar_color, scale=4.0, m
     return mat
 
 
+def _color_setting(s, attr_name, fallback):
+    if s is None:
+        return fallback
+    value = tuple(getattr(s, attr_name, fallback))
+    if len(value) >= 4:
+        return value[:4]
+    return (*value[:3], 1.0)
+
+
+def _float_setting(s, attr_name, fallback, min_value=None):
+    value = float(getattr(s, attr_name, fallback)) if s else fallback
+    return max(min_value, value) if min_value is not None else value
+
+
+def _percent_setting(s, attr_name, fallback):
+    value = _float_setting(s, attr_name, fallback)
+    return max(0.0, min(100.0, value))
+
+
+def _brick_material_from_settings(s, name, prefix, defaults):
+    return procedural_brick_material(
+        name,
+        _color_setting(s, f"{prefix}_color_a", defaults["color_a"]),
+        _color_setting(s, f"{prefix}_color_b", defaults["color_b"]),
+        _color_setting(s, f"{prefix}_mortar_color", defaults["mortar_color"]),
+        scale=_float_setting(s, f"{prefix}_scale", defaults["scale"], 0.1),
+        mortar_size=_float_setting(s, f"{prefix}_mortar_size", defaults["mortar_size"], 0.001),
+        bump_strength=_float_setting(s, f"{prefix}_bump_strength", defaults["bump_strength"], 0.0),
+        rotation=_float_setting(s, f"{prefix}_rotation", defaults["rotation"]),
+        color_a_percent=_percent_setting(s, f"{prefix}_color_a_percent", defaults["color_a_percent"]),
+    )
+
+
 def create_brick_wall_materials(s=None):
-    brick_scale = max(0.1, float(getattr(s, "brick_scale", 8.0))) if s else 8.0
-    mortar_size = max(0.001, float(getattr(s, "brick_mortar_size", 0.035))) if s else 0.035
-    bump_strength = max(0.0, float(getattr(s, "brick_bump_strength", 0.08))) if s else 0.08
-    base = procedural_brick_material(
+    base_defaults = {
+        "color_a": (0.60, 0.51, 0.39, 1.0),
+        "color_b": (0.52, 0.44, 0.34, 1.0),
+        "mortar_color": (0.72, 0.68, 0.58, 1.0),
+        "scale": 8.0,
+        "mortar_size": 0.035,
+        "bump_strength": 0.08,
+        "rotation": 0.0,
+        "color_a_percent": 50.0,
+    }
+    top_defaults = {
+        "color_a": (0.66, 0.58, 0.45, 1.0),
+        "color_b": (0.58, 0.50, 0.39, 1.0),
+        "mortar_color": (0.76, 0.72, 0.62, 1.0),
+        "scale": 10.0,
+        "mortar_size": 0.035,
+        "bump_strength": 0.08,
+        "rotation": 0.0,
+        "color_a_percent": 50.0,
+    }
+    tunnel_defaults = {
+        "color_a": (0.46, 0.42, 0.35, 1.0),
+        "color_b": (0.38, 0.35, 0.30, 1.0),
+        "mortar_color": (0.62, 0.58, 0.50, 1.0),
+        "scale": 7.0,
+        "mortar_size": 0.03,
+        "bump_strength": 0.08,
+        "rotation": 1.57079632679,
+        "color_a_percent": 50.0,
+    }
+    stair_top_defaults = {
+        "color_a": (0.64, 0.56, 0.43, 1.0),
+        "color_b": (0.56, 0.48, 0.37, 1.0),
+        "mortar_color": (0.74, 0.70, 0.60, 1.0),
+        "scale": 9.0,
+        "mortar_size": 0.035,
+        "bump_strength": 0.08,
+        "rotation": 0.0,
+        "color_a_percent": 50.0,
+    }
+    base = _brick_material_from_settings(
+        s,
         "WP_Brick_Wall",
-        (0.60, 0.51, 0.39, 1.0),
-        (0.52, 0.44, 0.34, 1.0),
-        (0.72, 0.68, 0.58, 1.0),
-        scale=brick_scale,
-        mortar_size=mortar_size,
-        bump_strength=bump_strength,
+        "brick",
+        base_defaults,
     )
-    top = procedural_brick_material(
+    top = _brick_material_from_settings(
+        s,
         "WP_Brick_Wall_Top",
-        (0.66, 0.58, 0.45, 1.0),
-        (0.58, 0.50, 0.39, 1.0),
-        (0.76, 0.72, 0.62, 1.0),
-        scale=brick_scale * 1.25,
-        mortar_size=mortar_size,
-        bump_strength=bump_strength,
+        "brick_top",
+        top_defaults,
     )
-    return base, top
-
-
-def brick_line_material():
-    mat = bpy.data.materials.get("WP_Brick_Mortar_Lines")
-    if mat is None:
-        mat = bpy.data.materials.new("WP_Brick_Mortar_Lines")
-        mat.diffuse_color = (0.20, 0.17, 0.13, 1.0)
-    return mat
+    tunnel = _brick_material_from_settings(
+        s,
+        "WP_Brick_Tunnel",
+        "brick_tunnel",
+        tunnel_defaults,
+    )
+    tunnel_top = _brick_material_from_settings(
+        s,
+        "WP_Brick_Tunnel_Top",
+        "brick_tunnel",
+        tunnel_defaults,
+    )
+    stair_top = _brick_material_from_settings(
+        s,
+        "WP_Brick_Stair_Top",
+        "brick_stair_top",
+        stair_top_defaults,
+    )
+    return {
+        "wall": base,
+        "wall_top": top,
+        "tunnel": tunnel,
+        "tunnel_top": tunnel_top,
+        "stair_top": stair_top,
+    }
 
 
 def using_brick_material(s):
@@ -356,6 +439,19 @@ def sorted_towers(scene, rig=None):
     return items
 
 
+def sorted_base_cutters(scene, rig=None):
+    wall_id = wall_id_from_obj(rig) if rig else None
+    items = []
+    for obj in bpy.data.objects:
+        if not obj.get(BASE_CUTTER_TAG):
+            continue
+        if wall_id is not None and obj.get(WALL_ID_TAG) != wall_id:
+            continue
+        items.append(obj)
+    items.sort(key=lambda item: item.name)
+    return items
+
+
 def ensure_wall_object(context):
     rig = ensure_rig_object(context)
     scene = context.scene
@@ -549,7 +645,7 @@ def bind_towers_to_wall(scene, rig, wall_obj, local_points):
 
 
 def ensure_opening_boolean(scene, context, wall_obj, rig):
-    openings = sorted_openings(scene, rig) + sorted_gates(scene, rig)
+    openings = sorted_openings(scene, rig) + sorted_gates(scene, rig) + sorted_base_cutters(scene, rig)
     existing = wall_obj.modifiers.get("WP_Openings")
     if not openings:
         if existing:
@@ -1010,6 +1106,91 @@ def clear_gate_instances(rig):
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
+def clear_base_cutters(rig):
+    wall_id = wall_id_from_obj(rig)
+    for obj in list(bpy.data.objects):
+        if obj.get(BASE_CUTTER_TAG) and obj.get(WALL_ID_TAG) == wall_id:
+            mesh = obj.data if obj.type == 'MESH' else None
+            bpy.data.objects.remove(obj, do_unlink=True)
+            if mesh is not None and mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+
+
+def rebuild_base_cutters(scene, context, rig, wall_obj):
+    clear_base_cutters(rig)
+    s = settings(scene)
+    wall_id = wall_id_from_obj(rig)
+    if wall_id is None:
+        return
+
+    inv = wall_obj.matrix_world.inverted_safe()
+    overcut = 0.08
+    cutter_height = max(
+        s.wall_height + s.parapet_height + s.crenel_height,
+        s.wall_height * max(0.01, s.gate_base_height_mult) + s.parapet_height + s.crenel_height,
+        s.wall_height * max(0.01, s.tower_base_height_mult) + s.parapet_height + s.crenel_height,
+        s.wall_height,
+    ) + (overcut * 2.0)
+
+    def add_cutter(name, matrix_world):
+        mesh = bpy.data.meshes.new(f"{name}_mesh")
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        obj = bpy.data.objects.new(name, mesh)
+        obj[ADDON_TAG] = True
+        obj[BASE_CUTTER_TAG] = True
+        obj[WALL_ID_TAG] = wall_id
+        obj.display_type = 'WIRE'
+        obj.hide_render = True
+        ensure_collection(context).objects.link(obj)
+        obj.matrix_world = matrix_world
+        parent_keep_transform(obj, wall_obj)
+        obj.hide_set(True)
+        return obj
+
+    for idx, gate in enumerate(sorted_gates(scene, rig)):
+        if not object_is_valid(gate) or get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED':
+            continue
+        gate_length = max(0.05, get_gate_length(gate, s.gate_length))
+        base_width = max(0.05, gate_length * max(0.01, s.gate_base_width_mult))
+        base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
+        bottom_width = max(0.05, base_width * max(0.01, s.gate_base_bottom_width_mult))
+        bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
+        local_gate_m = inv @ gate.matrix_world
+        local_pos = local_gate_m.translation.copy()
+        local_yaw = local_gate_m.to_euler('XYZ').z
+        local_matrix = (
+            Matrix.Translation(Vector((local_pos.x, local_pos.y, (cutter_height * 0.5) - overcut)))
+            @ Matrix.Rotation(local_yaw, 4, 'Z')
+            @ Matrix.Diagonal((bottom_width + overcut, bottom_thickness + overcut, cutter_height, 1.0))
+        )
+        add_cutter(f"BASE_CUT_GATE_{wall_id:03d}_{idx:03d}", wall_obj.matrix_world @ local_matrix)
+
+    if s.tower_base_style != 'FORTIFIED':
+        return
+    for idx, tower in enumerate(sorted_towers(scene, rig)):
+        if not object_is_valid(tower):
+            continue
+        tower_length = max(0.05, float(getattr(s, "tower_length", s.gate_length)))
+        base_width = max(0.05, tower_length * max(0.01, s.tower_base_width_mult))
+        base_thickness = max(0.05, s.wall_thickness * max(0.01, s.tower_base_thickness_mult))
+        bottom_width = max(0.05, base_width * max(0.01, s.tower_base_bottom_width_mult))
+        bottom_thickness = max(0.05, base_thickness * max(0.01, s.tower_base_bottom_thickness_mult))
+        local_tower_m = inv @ tower.matrix_world
+        local_pos = local_tower_m.translation.copy()
+        local_yaw = local_tower_m.to_euler('XYZ').z
+        local_matrix = (
+            Matrix.Translation(Vector((local_pos.x, local_pos.y, (cutter_height * 0.5) - overcut)))
+            @ Matrix.Rotation(local_yaw, 4, 'Z')
+            @ Matrix.Diagonal((bottom_width + overcut, bottom_thickness + overcut, cutter_height, 1.0))
+        )
+        add_cutter(f"BASE_CUT_TOWER_{wall_id:03d}_{idx:03d}", wall_obj.matrix_world @ local_matrix)
+
+
 def rebuild_wall_instances(scene, context, rig, wall_obj, local_points):
     clear_wall_instances(rig)
     s = settings(scene)
@@ -1340,7 +1521,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             except ValueError:
                 pass
 
-        apply_bmesh_materials(tunnel_mesh, bm, *material_pair(s, "gate_material", "gate_top_material", "gate", "gate_top"))
+        apply_bmesh_materials(tunnel_mesh, bm, *material_pair(s, "gate_tunnel_material", "gate_tunnel_top_material", "gate", "gate_top"))
         bm.to_mesh(tunnel_mesh)
         bm.free()
         tunnel_mesh.update()
@@ -1681,52 +1862,6 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         instance.matrix_world = tower.matrix_world.copy()
         parent_keep_transform(instance, wall_obj)
         create_top_access_stairs(idx, tower_half_width, tower_height, instance.matrix_world)
-
-
-def add_brick_line_faces(bm, a, b, outward, wall_height, brick_scale, mortar_size):
-    seg = b - a
-    seg_len = seg.length
-    if seg_len <= 1e-6 or wall_height <= 1e-6:
-        return
-    tangent = seg.normalized()
-    outward = outward.normalized() if outward.length > 1e-6 else Vector((0.0, 1.0, 0.0))
-    lift = outward * 0.006
-    brick_h = max(0.12, 1.0 / max(0.1, brick_scale) * 1.6)
-    brick_w = brick_h * 2.4
-    line_h = _clamp(mortar_size * 0.06, 0.008, brick_h * 0.35)
-    line_w = _clamp(mortar_size * 0.05, 0.006, brick_w * 0.25)
-
-    def add_quad(p0, p1, p2, p3):
-        verts = [bm.verts.new(v) for v in (p0, p1, p2, p3)]
-        try:
-            face = bm.faces.new(verts)
-        except ValueError:
-            return
-        face.material_index = 2
-
-    z = brick_h
-    while z < wall_height - 1e-6:
-        z0 = max(0.0, z - line_h * 0.5)
-        z1 = min(wall_height, z + line_h * 0.5)
-        add_quad(a + lift + Vector((0.0, 0.0, z0)), b + lift + Vector((0.0, 0.0, z0)), b + lift + Vector((0.0, 0.0, z1)), a + lift + Vector((0.0, 0.0, z1)))
-        z += brick_h
-
-    row = 0
-    z0 = 0.0
-    while z0 < wall_height - 1e-6:
-        z1 = min(wall_height, z0 + brick_h)
-        offset = brick_w * 0.5 if row % 2 else 0.0
-        x = offset
-        while x < seg_len - 1e-6:
-            center = a + tangent * x
-            p0 = center - tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z0))
-            p1 = center + tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z0))
-            p2 = center + tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z1))
-            p3 = center - tangent * (line_w * 0.5) + lift + Vector((0.0, 0.0, z1))
-            add_quad(p0, p1, p2, p3)
-            x += brick_w
-        row += 1
-        z0 += brick_h
 
 
 def build_wall_mesh(scene, context=None):
@@ -2168,18 +2303,6 @@ def build_wall_mesh(scene, context=None):
                                     pass
                             offset += step
 
-            if using_brick_material(s):
-                brick_scale = max(0.1, float(getattr(s, "brick_scale", 8.0)))
-                mortar_size = max(0.001, float(getattr(s, "brick_mortar_size", 0.035)))
-                for i in range(edge_count):
-                    j = (i + 1) % n
-                    tangent = _safe_dir_2d(points[i], points[j])
-                    if tangent is None:
-                        continue
-                    normal = Vector((-tangent.y, tangent.x, 0.0))
-                    add_brick_line_faces(bm, plus[i], plus[j], normal, s.wall_height, brick_scale, mortar_size)
-                    add_brick_line_faces(bm, minus[i], minus[j], -normal, s.wall_height, brick_scale, mortar_size)
-
     if len(points) >= 2:
         has_height_variation = any(abs(points[i].z - points[(i + 1) % len(points)].z) > 1e-5 for i in range(len(points) - (0 if closed else 1)))
         if has_height_variation:
@@ -2187,14 +2310,14 @@ def build_wall_mesh(scene, context=None):
             # Triangulating them removes the visible "twist" Blender shows on those faces.
             bmesh.ops.triangulate(bm, faces=list(bm.faces))
 
-    accent_mat = brick_line_material() if using_brick_material(s) else None
-    apply_bmesh_materials(mesh, bm, *material_pair(s, "wall_material", "wall_top_material", "wall", "wall_top"), accent_mat=accent_mat)
+    apply_bmesh_materials(mesh, bm, *material_pair(s, "wall_material", "wall_top_material", "wall", "wall_top"))
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
     bind_openings_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     bind_gates_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
     bind_towers_to_wall(scene, rig, wall_obj, points if len(points) >= 2 else [])
+    rebuild_base_cutters(scene, ctx, rig, wall_obj)
     ensure_opening_boolean(scene, ctx, wall_obj, rig)
 
     use_wall_source = object_is_valid(s.wall_source)
