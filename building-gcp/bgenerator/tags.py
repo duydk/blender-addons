@@ -1,0 +1,6 @@
+ADDON_TAG = "BUILDING_GCP"
+ROOT_TAG = "building_gcp_root"
+PART_TAG = "building_gcp_part"
+BUILDING_ID_TAG = "building_gcp_id"
+BUILDING_TYPE_TAG = "building_gcp_type"
+BUILDING_PROFILE_TAG = "building_gcp_profile"

@@ -1,0 +1,14 @@
+schema_version = "1.0.0"
+
+id = "building_generator_gcp"
+version = "0.1.0"
+name = "Building Generator GCP"
+tagline = "Generate procedural buildings with editable parameters"
+maintainer = "DuyDK"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]

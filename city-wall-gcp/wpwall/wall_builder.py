@@ -288,13 +288,14 @@ def material_pair(s, base_attr, top_attr, base_key, top_key):
     return base_mat, top_mat
 
 
-def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5, accent_mat=None):
+def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5, accent_mat=None, uv_scale=None):
     bm.normal_update()
     mesh.materials.clear()
     mesh.materials.append(base_mat)
     mesh.materials.append(top_mat)
     if accent_mat is not None:
         mesh.materials.append(accent_mat)
+    uv_scale = uv_scale or Vector((1.0, 1.0, 1.0))
     uv_layer = bm.loops.layers.uv.verify()
     for face in bm.faces:
         face.smooth = False
@@ -308,7 +309,11 @@ def apply_bmesh_materials(mesh, bm, base_mat, top_mat, top_threshold=0.5, accent
         normal = face.normal
         ax, ay, az = abs(normal.x), abs(normal.y), abs(normal.z)
         for loop in face.loops:
-            co = loop.vert.co
+            co = Vector((
+                loop.vert.co.x * uv_scale.x,
+                loop.vert.co.y * uv_scale.y,
+                loop.vert.co.z * uv_scale.z,
+            ))
             if az >= ax and az >= ay:
                 loop[uv_layer].uv = (co.x, co.y)
             elif ax >= ay:
@@ -816,15 +821,20 @@ def _append_unique(points, point, eps=1e-5):
         points.append(point)
 
 
-def add_stepped_crenel_prism(bm, x0, x1, y0, y1, z0, z1, axis='X', drain_size=0.0):
+def _crenel_top_half(span, top_width):
+    width = float(top_width) if top_width and top_width > 0.0 else span / 3.0
+    return min(max(0.01, width * 0.5), span * 0.49)
+
+
+def add_stepped_crenel_prism(bm, x0, x1, y0, y1, z0, z1, axis='X', drain_size=0.0, top_width=0.0):
     if x1 - x0 <= 1e-6 or y1 - y0 <= 1e-6 or z1 - z0 <= 1e-6:
         return
 
     z_mid = z0 + ((z1 - z0) * 0.5)
     if axis == 'Y':
         center = (y0 + y1) * 0.5
-        top_half = max(0.01, (y1 - y0) / 6.0)
         span = y1 - y0
+        top_half = _crenel_top_half(span, top_width)
         notch_w = min(max(0.0, drain_size), span * 0.45)
         notch_h = min(max(0.0, drain_size), (z1 - z0) * 0.45)
         if notch_w > 1e-6 and notch_h > 1e-6:
@@ -859,8 +869,8 @@ def add_stepped_crenel_prism(bm, x0, x1, y0, y1, z0, z1, axis='X', drain_size=0.
         back = [bm.verts.new((x1, y, z)) for y, z in profile]
     else:
         center = (x0 + x1) * 0.5
-        top_half = max(0.01, (x1 - x0) / 6.0)
         span = x1 - x0
+        top_half = _crenel_top_half(span, top_width)
         notch_w = min(max(0.0, drain_size), span * 0.45)
         notch_h = min(max(0.0, drain_size), (z1 - z0) * 0.45)
         if notch_w > 1e-6 and notch_h > 1e-6:
@@ -914,7 +924,11 @@ def crenel_drain_size(s):
     return max(0.0, float(getattr(s, "parapet_drain_size", 0.12)))
 
 
-def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_size=0.0):
+def crenel_top_width(s):
+    return max(0.01, float(getattr(s, "crenel_top_width", getattr(s, "crenel_width", 0.45) / 3.0)))
+
+
+def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_size=0.0, top_width=0.0):
     if (outer1 - outer0).length <= 1e-6 or depth <= 1e-6 or height <= 1e-6:
         return
 
@@ -925,6 +939,9 @@ def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_
     def rail_point(t, z_factor):
         return outer0.lerp(outer1, t) + up * (height * z_factor)
 
+    top_half_t = _crenel_top_half(span, top_width) / span
+    top_left_t = 0.5 - top_half_t
+    top_right_t = 0.5 + top_half_t
     notch_w = min(max(0.0, drain_size), span * 0.45)
     notch_h = min(max(0.0, drain_size), height * 0.45)
     if notch_w > 1e-6 and notch_h > 1e-6:
@@ -938,10 +955,10 @@ def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_
             rail_point(0.5 + notch_half_t, 0.0),
             rail_point(1.0, 0.0),
             rail_point(1.0, 0.5),
-            rail_point(2.0 / 3.0, 0.5),
-            rail_point(2.0 / 3.0, 1.0),
-            rail_point(1.0 / 3.0, 1.0),
-            rail_point(1.0 / 3.0, 0.5),
+            rail_point(top_right_t, 0.5),
+            rail_point(top_right_t, 1.0),
+            rail_point(top_left_t, 1.0),
+            rail_point(top_left_t, 0.5),
             rail_point(0.0, 0.5),
         ]
     else:
@@ -949,10 +966,10 @@ def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_
             rail_point(0.0, 0.0),
             rail_point(1.0, 0.0),
             rail_point(1.0, 0.5),
-            rail_point(2.0 / 3.0, 0.5),
-            rail_point(2.0 / 3.0, 1.0),
-            rail_point(1.0 / 3.0, 1.0),
-            rail_point(1.0 / 3.0, 0.5),
+            rail_point(top_right_t, 0.5),
+            rail_point(top_right_t, 1.0),
+            rail_point(top_left_t, 1.0),
+            rail_point(top_left_t, 0.5),
             rail_point(0.0, 0.5),
         ]
     profile_inner = [point + inner_offset for point in profile_outer]
@@ -976,9 +993,6 @@ def add_stepped_crenel_between(bm, outer0, outer1, inward, depth, height, drain_
 def gate_style_items():
     return [
         ('ARCH', "Arch", "Rounded arch gate opening"),
-        ('RECT', "Rectangle", "Flat-top rectangular gate opening"),
-        ('POINTED', "Pointed", "Pointed arch gate opening"),
-        ('HORSESHOE', "Horseshoe", "Tall rounded horseshoe opening"),
     ]
 
 
@@ -997,20 +1011,57 @@ def gate_stair_side_items():
     ]
 
 
+def tower_stair_side_items():
+    return [
+        ('LEFT', "Left", "Place stairs on the left side of the tower"),
+        ('RIGHT', "Right", "Place stairs on the right side of the tower"),
+        ('BOTH', "Both", "Place stairs on both tower sides"),
+    ]
+
+
+def get_tower_stair_side(obj, default='BOTH'):
+    if not object_is_valid(obj):
+        return default
+    if "wp_wall_tower_stair_side" in obj:
+        try:
+            value = str(obj["wp_wall_tower_stair_side"])
+            if value in {'LEFT', 'RIGHT', 'BOTH'}:
+                return value
+        except Exception:
+            pass
+    if hasattr(obj, "wp_wall_tower_stair_side"):
+        try:
+            value = str(obj.wp_wall_tower_stair_side)
+            if value in {'LEFT', 'RIGHT', 'BOTH'}:
+                return value
+        except Exception:
+            pass
+    return default
+
+
+def set_tower_stair_side(obj, value):
+    value = str(value)
+    if value not in {'LEFT', 'RIGHT', 'BOTH'}:
+        value = 'BOTH'
+    if hasattr(obj, "wp_wall_tower_stair_side"):
+        obj.wp_wall_tower_stair_side = value
+    obj["wp_wall_tower_stair_side"] = value
+
+
 def get_gate_style(obj, default='ARCH'):
     if not object_is_valid(obj):
         return default
     if hasattr(obj, "wp_wall_gate_style"):
         try:
             value = str(obj.wp_wall_gate_style)
-            if value in {'ARCH', 'RECT', 'POINTED', 'HORSESHOE'}:
+            if value == 'ARCH':
                 return value
         except Exception:
             pass
     if "wp_wall_gate_style" in obj:
         try:
             value = str(obj["wp_wall_gate_style"])
-            if value in {'ARCH', 'RECT', 'POINTED', 'HORSESHOE'}:
+            if value == 'ARCH':
                 return value
         except Exception:
             pass
@@ -1019,7 +1070,7 @@ def get_gate_style(obj, default='ARCH'):
 
 def set_gate_style(obj, value):
     value = str(value)
-    if value not in {'ARCH', 'RECT', 'POINTED', 'HORSESHOE'}:
+    if value != 'ARCH':
         value = 'ARCH'
     if hasattr(obj, "wp_wall_gate_style"):
         obj.wp_wall_gate_style = value
@@ -1841,17 +1892,46 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         y_back = 0.51
         tunnel_width = max(0.1, float(getattr(s, "gate_tunnel_width", 1.0)))
         tunnel_height = max(0.1, float(getattr(s, "gate_tunnel_height", 0.94)))
-        outer_radius = tunnel_width * 0.5
-        outer_arch_height = min(outer_radius, tunnel_height)
+        z_lift = float(getattr(s, "gate_tunnel_z_offset", 0.03))
+        outer_overlap = 0.01
+        inner_base_radius = tunnel_width * 0.5
+        outer_radius = inner_base_radius + outer_overlap
+        outer_target_height = max(tunnel_height, 1.0 - z_lift + outer_overlap)
+        outer_arch_height = min(outer_radius, outer_target_height)
         outer_left = -outer_radius
         outer_right = outer_radius
-        outer_shoulder = max(0.0, tunnel_height - outer_arch_height)
-        tunnel_thickness = min(max(0.01, outer_radius - 0.05), max(0.01, float(getattr(s, "gate_tunnel_thickness", 0.14))))
-        inner_half = max(0.05, outer_radius - tunnel_thickness)
-        inner_shoulder = outer_shoulder
+        outer_shoulder = max(0.0, outer_target_height - outer_arch_height)
+        tunnel_thickness = min(max(0.01, inner_base_radius - 0.05), max(0.01, float(getattr(s, "gate_tunnel_thickness", 0.14))))
+        inner_half = max(0.05, inner_base_radius - tunnel_thickness)
+        inner_shoulder = max(0.0, tunnel_height - min(inner_base_radius, tunnel_height))
         inner_radius = inner_half
         inner_inset = 0.0
-        z_lift = float(getattr(s, "gate_tunnel_z_offset", 0.03))
+        fortified_base = get_gate_base_style(gate_obj, s.gate_base_style) == 'FORTIFIED'
+        local_gate_m = inv @ gate_obj.matrix_world
+        gate_scale = local_gate_m.to_scale()
+        gate_depth_scale = max(1e-6, abs(gate_scale.y))
+        gate_height_scale = max(1e-6, abs(gate_scale.z))
+        gate_z_origin = local_gate_m.translation.z
+        base_top_half_thickness = 0.0
+        base_bottom_half_thickness = 0.0
+        base_height = 1.0
+        base_overhang = 0.0
+        if fortified_base:
+            base_thickness = max(0.05, s.wall_thickness * max(0.01, s.gate_base_thickness_mult))
+            base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
+            bottom_thickness = max(0.05, base_thickness * max(0.01, s.gate_base_bottom_thickness_mult))
+            base_top_half_thickness = base_thickness * 0.5
+            base_bottom_half_thickness = bottom_thickness * 0.5
+            base_overhang = max(0.0, float(getattr(s, "gate_tunnel_base_overhang", 0.0)))
+
+        def tunnel_vert(x, y, z):
+            if fortified_base and abs(y) > 1e-8:
+                world_z = max(0.0, min(base_height, gate_z_origin + (z * gate_height_scale)))
+                factor = world_z / base_height
+                base_half = base_bottom_half_thickness + ((base_top_half_thickness - base_bottom_half_thickness) * factor)
+                base_half += base_overhang
+                y = (1.0 if y > 0.0 else -1.0) * (base_half / gate_depth_scale)
+            return bm.verts.new((x, y, z))
 
         def outer_arch_z(x):
             arch = max(0.0, outer_radius * outer_radius - x * x) ** 0.5
@@ -1866,10 +1946,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                 t = strip_step / max(1, int(strip_steps))
                 x = x0 + ((x1 - x0) * t)
                 z = outer_arch_z(x)
-                front_bottom.append(bm.verts.new((x, y_front, z_lift)))
-                back_bottom.append(bm.verts.new((x, y_back, z_lift)))
-                front_top.append(bm.verts.new((x, y_front, z + z_lift)))
-                back_top.append(bm.verts.new((x, y_back, z + z_lift)))
+                front_bottom.append(tunnel_vert(x, y_front, z_lift))
+                back_bottom.append(tunnel_vert(x, y_back, z_lift))
+                front_top.append(tunnel_vert(x, y_front, z + z_lift))
+                back_top.append(tunnel_vert(x, y_back, z + z_lift))
 
             for strip_step in range(len(front_bottom) - 1):
                 faces = (
@@ -1907,10 +1987,10 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             arch_z = inner_shoulder + max(0.0, inner_radius * inner_radius - x * x) ** 0.5
             inner_z = max(0.0, arch_z - inner_inset)
             outer_z = outer_arch_z(x)
-            inner_front.append(bm.verts.new((x, y_front, inner_z + z_lift)))
-            inner_back.append(bm.verts.new((x, y_back, inner_z + z_lift)))
-            outer_front.append(bm.verts.new((x, y_front, outer_z + z_lift)))
-            outer_back.append(bm.verts.new((x, y_back, outer_z + z_lift)))
+            inner_front.append(tunnel_vert(x, y_front, inner_z + z_lift))
+            inner_back.append(tunnel_vert(x, y_back, inner_z + z_lift))
+            outer_front.append(tunnel_vert(x, y_front, outer_z + z_lift))
+            outer_back.append(tunnel_vert(x, y_back, outer_z + z_lift))
 
         # Curved top masonry between the inner opening arch and outer arch.
         for step in range(step_count):
@@ -1935,7 +2015,12 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             except ValueError:
                 pass
 
-        apply_bmesh_materials(tunnel_mesh, bm, *material_pair(s, "gate_tunnel_material", "gate_tunnel_top_material", "gate", "gate_top"))
+        apply_bmesh_materials(
+            tunnel_mesh,
+            bm,
+            *material_pair(s, "gate_tunnel_material", "gate_tunnel_top_material", "gate", "gate_top"),
+            uv_scale=Vector((abs(gate_scale.x), abs(gate_scale.y), abs(gate_scale.z))),
+        )
         bm.to_mesh(tunnel_mesh)
         bm.free()
         tunnel_mesh.update()
@@ -1987,15 +2072,18 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
         crenel_w = max(0.0, s.crenel_width)
         crenel_g = max(0.0, s.crenel_gap)
         wall_clear_y = min(tt, max(0.0, s.wall_thickness * 0.5))
+        side_clear_y = wall_clear_y
+        if bool(getattr(s, "gate_wall_stairs_enabled", True)) and h > s.wall_height + 1e-6:
+            side_clear_y = min(tt, max(side_clear_y, max(0.025, float(getattr(s, "gate_wall_stair_depth", 0.6)) * 0.5)))
 
-        def exposed_y_ranges(y0, y1):
-            if wall_clear_y <= 1e-6:
+        def exposed_y_ranges(y0, y1, clear_y):
+            if clear_y <= 1e-6:
                 return [(y0, y1)]
             ranges = []
-            if y0 < -wall_clear_y - 1e-6:
-                ranges.append((y0, min(y1, -wall_clear_y)))
-            if y1 > wall_clear_y + 1e-6:
-                ranges.append((max(y0, wall_clear_y), y1))
+            if y0 < -clear_y - 1e-6:
+                ranges.append((y0, min(y1, -clear_y)))
+            if y1 > clear_y + 1e-6:
+                ranges.append((max(y0, clear_y), y1))
             return [(a, b) for a, b in ranges if b - a > 1e-6]
 
         def add_prism(x0, x1, y0, y1, z0, z1):
@@ -2049,7 +2137,7 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
             add_prism(-tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
             add_prism(-tw, tw, tt - parapet_w, tt, h, h + parapet_h)
             # Left and right parapet rails.
-            for y0, y1 in exposed_y_ranges(-tt, tt):
+            for y0, y1 in exposed_y_ranges(-tt, tt, side_clear_y):
                 add_prism(-tw, -tw + parapet_w, y0, y1, h, h + parapet_h)
                 add_prism(tw - parapet_w, tw, y0, y1, h, h + parapet_h)
 
@@ -2063,8 +2151,8 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                     while offset_x + crenel_w <= rail_len_x + 1e-6:
                         x0 = -tw + offset_x
                         x1 = min(tw, x0 + crenel_w)
-                        add_stepped_crenel_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
-                        add_stepped_crenel_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
+                        add_stepped_crenel_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
+                        add_stepped_crenel_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
                         offset_x += step
 
                     # Left/right rails (vary along Y).
@@ -2073,9 +2161,9 @@ def rebuild_gate_instances(scene, context, rig, wall_obj):
                     while offset_y + crenel_w <= rail_len_y + 1e-6:
                         y0 = -tt + offset_y
                         y1 = min(tt, y0 + crenel_w)
-                        if y1 <= -wall_clear_y + 1e-6 or y0 >= wall_clear_y - 1e-6:
-                            add_stepped_crenel_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
-                            add_stepped_crenel_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
+                        if y1 <= -side_clear_y + 1e-6 or y0 >= side_clear_y - 1e-6:
+                            add_stepped_crenel_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
+                            add_stepped_crenel_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
                         offset_y += step
         apply_bmesh_materials(mesh, bm, *material_pair(s, "gate_material", "gate_top_material", "gate", "gate_top"))
         bm.to_mesh(mesh)
@@ -2154,10 +2242,11 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
             except ValueError:
                 pass
 
-    def create_top_access_stairs(idx, base_half_width, base_height, matrix_world):
+    def create_top_access_stairs(tower_obj, idx, base_half_width, base_height, matrix_world):
         if not bool(getattr(s, "tower_wall_stairs_enabled", True)) or base_height <= s.wall_height + 1e-6:
             return
         stair_steps = max(1, int(getattr(s, "tower_wall_stair_steps", 7)))
+        stair_side = get_tower_stair_side(tower_obj, getattr(s, "tower_wall_stair_side", 'BOTH'))
         rise = base_height - s.wall_height
         step_len = max(0.05, max(0.1, float(getattr(s, "tower_wall_stair_length", 1.6))) / stair_steps)
         step_height = rise / stair_steps
@@ -2176,8 +2265,10 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                 x1 = inner_x + (d1 * x_dir)
                 add_prism(bm, min(x0, x1), max(x0, x1), -half_depth, half_depth, z0, z1)
 
-        add_top_run(-base_half_width, -1.0)
-        add_top_run(base_half_width, 1.0)
+        if stair_side in {'LEFT', 'BOTH'}:
+            add_top_run(-base_half_width, -1.0)
+        if stair_side in {'RIGHT', 'BOTH'}:
+            add_top_run(base_half_width, 1.0)
         apply_bmesh_materials(mesh, bm, *material_pair(s, "stair_material", "stair_top_material", "stair", "stair_top"))
         bm.to_mesh(mesh)
         bm.free()
@@ -2208,15 +2299,21 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         bt = bottom_thickness * 0.5
         h = base_height
         wall_clear_y = min(tt, max(0.0, s.wall_thickness * 0.5))
+        stair_side = get_tower_stair_side(tower_obj, getattr(s, "tower_wall_stair_side", 'BOTH'))
+        stair_clear_y = wall_clear_y
+        if bool(getattr(s, "tower_wall_stairs_enabled", True)) and h > s.wall_height + 1e-6:
+            stair_clear_y = min(tt, max(stair_clear_y, max(0.025, float(getattr(s, "tower_wall_stair_depth", 0.6)) * 0.5)))
+        left_clear_y = stair_clear_y if stair_side in {'LEFT', 'BOTH'} else wall_clear_y
+        right_clear_y = stair_clear_y if stair_side in {'RIGHT', 'BOTH'} else wall_clear_y
 
-        def exposed_y_ranges(y0, y1):
-            if wall_clear_y <= 1e-6:
+        def exposed_y_ranges(y0, y1, clear_y):
+            if clear_y <= 1e-6:
                 return [(y0, y1)]
             ranges = []
-            if y0 < -wall_clear_y - 1e-6:
-                ranges.append((y0, min(y1, -wall_clear_y)))
-            if y1 > wall_clear_y + 1e-6:
-                ranges.append((max(y0, wall_clear_y), y1))
+            if y0 < -clear_y - 1e-6:
+                ranges.append((y0, min(y1, -clear_y)))
+            if y1 > clear_y + 1e-6:
+                ranges.append((max(y0, clear_y), y1))
             return [(a, b) for a, b in ranges if b - a > 1e-6]
 
         v0 = bm.verts.new((-bw, -bt, 0.0))
@@ -2243,8 +2340,9 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
         if parapet_h > 1e-6 and parapet_w > 1e-6 and tt > parapet_w:
             add_prism(bm, -tw, tw, -tt, -tt + parapet_w, h, h + parapet_h)
             add_prism(bm, -tw, tw, tt - parapet_w, tt, h, h + parapet_h)
-            for y0, y1 in exposed_y_ranges(-tt, tt):
+            for y0, y1 in exposed_y_ranges(-tt, tt, left_clear_y):
                 add_prism(bm, -tw, -tw + parapet_w, y0, y1, h, h + parapet_h)
+            for y0, y1 in exposed_y_ranges(-tt, tt, right_clear_y):
                 add_prism(bm, tw - parapet_w, tw, y0, y1, h, h + parapet_h)
 
             if crenel_h > 1e-6 and crenel_w > 1e-6:
@@ -2254,17 +2352,18 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
                     while offset_x + crenel_w <= (tw * 2.0) + 1e-6:
                         x0 = -tw + offset_x
                         x1 = min(tw, x0 + crenel_w)
-                        add_stepped_crenel_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
-                        add_stepped_crenel_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s))
+                        add_stepped_crenel_prism(bm, x0, x1, -tt, -tt + parapet_w, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
+                        add_stepped_crenel_prism(bm, x0, x1, tt - parapet_w, tt, h + parapet_h, h + parapet_h + crenel_h, axis='X', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
                         offset_x += step
 
                     offset_y = 0.0
                     while offset_y + crenel_w <= (tt * 2.0) + 1e-6:
                         y0 = -tt + offset_y
                         y1 = min(tt, y0 + crenel_w)
-                        if y1 <= -wall_clear_y + 1e-6 or y0 >= wall_clear_y - 1e-6:
-                            add_stepped_crenel_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
-                            add_stepped_crenel_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s))
+                        if y1 <= -left_clear_y + 1e-6 or y0 >= left_clear_y - 1e-6:
+                            add_stepped_crenel_prism(bm, -tw, -tw + parapet_w, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
+                        if y1 <= -right_clear_y + 1e-6 or y0 >= right_clear_y - 1e-6:
+                            add_stepped_crenel_prism(bm, tw - parapet_w, tw, y0, y1, h + parapet_h, h + parapet_h + crenel_h, axis='Y', drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
                         offset_y += step
 
         apply_bmesh_materials(mesh, bm, *material_pair(s, "tower_material", "tower_top_material", "tower", "tower_top"))
@@ -2298,7 +2397,7 @@ def rebuild_tower_instances(scene, context, rig, wall_obj):
             tower_height,
             min(tower_half_thickness, max(0.0, s.wall_thickness * 0.5)),
         )
-        create_top_access_stairs(idx, tower_half_width, tower_height, instance.matrix_world)
+        create_top_access_stairs(tower, idx, tower_half_width, tower_height, instance.matrix_world)
 
 
 def build_wall_mesh(scene, context=None):
@@ -2383,47 +2482,86 @@ def build_wall_mesh(scene, context=None):
             edge_count = n if closed else n - 1
 
             stair_clearances = []
-            if bool(getattr(s, "gate_stairs_enabled", True)) and edge_count > 0:
+            if edge_count > 0:
                 inv = wall_obj.matrix_world.inverted_safe()
-                stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
-                stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
-                side_gap = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
-                top_step_width_mult = max(1.0, float(getattr(s, "gate_stair_top_step_width_mult", 5.0)))
-                top_step_len = (stair_length / stair_steps) * top_step_width_mult
-                stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
-                stair_sides = []
-                if stair_side in {'INSIDE', 'BOTH'}:
-                    stair_sides.append(1.0)
-                if stair_side in {'OUTSIDE', 'BOTH'}:
-                    stair_sides.append(-1.0)
 
-                for gate in sorted_gates(scene, rig):
-                    if not object_is_valid(gate):
-                        continue
-                    gate_pos = inv @ gate.matrix_world.translation.copy()
-                    hit = nearest_segment_info(points, gate_pos, closed)
+                def add_clearances_for_spans(obj, side_spans, side_values):
+                    if not object_is_valid(obj) or not side_spans or not side_values:
+                        return
+                    obj_pos = inv @ obj.matrix_world.translation.copy()
+                    hit = nearest_segment_info(points, obj_pos, closed)
                     if hit is None:
-                        continue
+                        return
                     seg_idx, snapped, tangent = hit
                     if tangent is None or seg_idx < 0 or seg_idx >= edge_count:
-                        continue
+                        return
                     seg_a = points[seg_idx]
                     seg_b = points[(seg_idx + 1) % n]
                     seg_len = (seg_b - seg_a).length
                     if seg_len <= 1e-6:
-                        continue
-                    gate_center = (snapped - seg_a).dot(tangent)
-                    gate_half = max(0.05, get_gate_length(gate, s.gate_length)) * 0.5
-                    relative_spans = (
-                        (-gate_half - side_gap - top_step_len, -gate_half - side_gap),
-                        (gate_half + side_gap, gate_half + side_gap + top_step_len),
-                    )
-                    for side in stair_sides:
-                        for start_rel, end_rel in relative_spans:
-                            start = max(0.0, gate_center + start_rel)
-                            end = min(seg_len, gate_center + end_rel)
+                        return
+                    center = (snapped - seg_a).dot(tangent)
+                    for side in side_values:
+                        for start_rel, end_rel in side_spans:
+                            start = max(0.0, center + start_rel)
+                            end = min(seg_len, center + end_rel)
                             if end > start + 1e-6:
                                 stair_clearances.append((seg_idx, side, start, end))
+
+                def centered_stair_side_values(stair_depth):
+                    half_depth = max(0.025, float(stair_depth) * 0.5)
+                    parapet_inner = max(0.0, half - max(0.0, s.parapet_width))
+                    return (1.0, -1.0) if half_depth >= parapet_inner - 1e-6 else ()
+
+                if bool(getattr(s, "gate_stairs_enabled", True)):
+                    stair_length = max(0.1, float(getattr(s, "gate_stair_length", 1.6)))
+                    stair_steps = max(1, int(getattr(s, "gate_stair_steps", 7)))
+                    side_gap = max(0.0, float(getattr(s, "gate_stair_offset", 0.05)))
+                    top_step_width_mult = max(1.0, float(getattr(s, "gate_stair_top_step_width_mult", 5.0)))
+                    top_step_len = (stair_length / stair_steps) * top_step_width_mult
+                    stair_side = str(getattr(s, "gate_stair_side", 'INSIDE'))
+                    stair_sides = []
+                    if stair_side in {'INSIDE', 'BOTH'}:
+                        stair_sides.append(1.0)
+                    if stair_side in {'OUTSIDE', 'BOTH'}:
+                        stair_sides.append(-1.0)
+
+                    for gate in sorted_gates(scene, rig):
+                        gate_half = max(0.05, get_gate_length(gate, s.gate_length)) * 0.5
+                        add_clearances_for_spans(gate, (
+                            (-gate_half - side_gap - top_step_len, -gate_half - side_gap),
+                            (gate_half + side_gap, gate_half + side_gap + top_step_len),
+                        ), stair_sides)
+
+                if bool(getattr(s, "gate_wall_stairs_enabled", True)):
+                    stair_len = max(0.1, float(getattr(s, "gate_wall_stair_length", 1.6)))
+                    stair_sides = centered_stair_side_values(getattr(s, "gate_wall_stair_depth", 0.6))
+                    base_height = max(0.05, s.wall_height * max(0.01, s.gate_base_height_mult))
+                    for gate in sorted_gates(scene, rig):
+                        if not object_is_valid(gate) or get_gate_base_style(gate, s.gate_base_style) != 'FORTIFIED' or base_height <= s.wall_height + 1e-6:
+                            continue
+                        gate_length = max(0.05, get_gate_length(gate, s.gate_length))
+                        base_half = max(0.05, gate_length * max(0.01, s.gate_base_width_mult)) * 0.5
+                        add_clearances_for_spans(gate, (
+                            (-base_half - stair_len, -base_half),
+                            (base_half, base_half + stair_len),
+                        ), stair_sides)
+
+                if bool(getattr(s, "tower_wall_stairs_enabled", True)) and s.tower_base_style == 'FORTIFIED':
+                    stair_len = max(0.1, float(getattr(s, "tower_wall_stair_length", 1.6)))
+                    stair_sides = centered_stair_side_values(getattr(s, "tower_wall_stair_depth", 0.6))
+                    tower_length = max(0.05, float(getattr(s, "tower_length", s.gate_length)))
+                    base_half = max(0.05, tower_length * max(0.01, s.tower_base_width_mult)) * 0.5
+                    base_height = max(0.05, s.wall_height * max(0.01, s.tower_base_height_mult))
+                    if base_height > s.wall_height + 1e-6:
+                        for tower in sorted_towers(scene, rig):
+                            tower_side = get_tower_stair_side(tower, getattr(s, "tower_wall_stair_side", 'BOTH'))
+                            rel_spans = []
+                            if tower_side in {'LEFT', 'BOTH'}:
+                                rel_spans.append((-base_half - stair_len, -base_half))
+                            if tower_side in {'RIGHT', 'BOTH'}:
+                                rel_spans.append((base_half, base_half + stair_len))
+                            add_clearances_for_spans(tower, rel_spans, stair_sides)
 
             def stair_clearance_overlaps(seg_idx, side, start, end):
                 for clear_seg, clear_side, clear_start, clear_end in stair_clearances:
@@ -2676,7 +2814,7 @@ def build_wall_mesh(scene, context=None):
                                 continue
                             base0 = outer_a.lerp(outer_b, t0) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
                             base1 = outer_a.lerp(outer_b, t1) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
-                            add_stepped_crenel_between(bm, base0, base1, inward, s.parapet_width, s.crenel_height, drain_size=crenel_drain_size(s))
+                            add_stepped_crenel_between(bm, base0, base1, inward, s.parapet_width, s.crenel_height, drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
                             offset += step
 
                 if not closed and s.crenel_end_caps:
@@ -2699,7 +2837,7 @@ def build_wall_mesh(scene, context=None):
                             t1 = min(1.0, (offset + s.crenel_width) / rail_len)
                             b0 = outer_a.lerp(outer_b, t0) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
                             b1 = outer_a.lerp(outer_b, t1) + Vector((0.0, 0.0, s.wall_height + s.parapet_height))
-                            add_stepped_crenel_between(bm, b0, b1, inward, s.parapet_width, s.crenel_height, drain_size=crenel_drain_size(s))
+                            add_stepped_crenel_between(bm, b0, b1, inward, s.parapet_width, s.crenel_height, drain_size=crenel_drain_size(s), top_width=crenel_top_width(s))
                             offset += step
 
     if len(points) >= 2:

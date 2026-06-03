@@ -1,7 +1,7 @@
 import bpy
 from bpy.props import CollectionProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty
 
-from .wpwall.wall_builder import gate_base_items, gate_style_items
+from .wpwall.wall_builder import gate_base_items, gate_style_items, tower_stair_side_items
 from .wpwall.handlers import depsgraph_update_handler
 from .wpwall.props_ops import (
     WPWALL_OT_add_gate,
@@ -105,6 +105,12 @@ def register():
         default='NONE',
         update=update_gate_base_style_object,
     )
+    bpy.types.Object.wp_wall_tower_stair_side = EnumProperty(
+        name="Tower Stair Side",
+        items=tower_stair_side_items(),
+        default='BOTH',
+        update=lambda self, ctx: trigger_rebuild(ctx),
+    )
     bpy.types.Scene.wp_wall_settings = PointerProperty(type=WPWallSettings)
     bpy.types.Scene.wp_wall_waypoints = CollectionProperty(type=WPWallWaypointRef)
     bpy.types.Scene.wp_wall_active_rig = PointerProperty(name="Active Wall Rig", type=bpy.types.Object)
@@ -116,6 +122,8 @@ def register():
 def unregister():
     if depsgraph_update_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_handler)
+    if hasattr(bpy.types.Object, "wp_wall_tower_stair_side"):
+        del bpy.types.Object.wp_wall_tower_stair_side
     del bpy.types.Object.wp_wall_gate_base_style
     del bpy.types.Object.wp_wall_gate_style
     del bpy.types.Object.wp_wall_gate_height

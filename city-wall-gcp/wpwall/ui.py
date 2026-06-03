@@ -107,14 +107,6 @@ def draw_main_panel(layout, context):
     nav.operator("wpwall.select_prev_waypoint", icon='TRIA_LEFT', text="Prev WP")
     nav.operator("wpwall.select_next_waypoint", icon='TRIA_RIGHT', text="Next WP")
 
-    status = layout.box()
-    status.label(text=f"Active Wall: {rig.name if object_is_valid(rig) else 'None'}")
-    if object_is_valid(rig):
-        status.label(text=f"Waypoints: {len(sorted_waypoints(context.scene, rig))}")
-        status.label(text=f"Openings: {len(sorted_openings(context.scene, rig))}")
-        status.label(text=f"Gates: {len(sorted_gates(context.scene, rig))}")
-        status.label(text=f"Towers: {len(sorted_towers(context.scene, rig))}")
-
     layout.separator()
     try:
         if active_is_waypoint:
@@ -176,6 +168,7 @@ def draw_main_panel(layout, context):
             if get_gate_base_style(active, s.gate_base_style) == 'FORTIFIED':
                 base_col = box.column(align=True)
                 base_col.label(text="Fortified Base")
+                base_col.prop(s, "gate_tunnel_base_overhang")
                 base_col.prop(s, "gate_base_width_mult")
                 base_col.prop(s, "gate_base_thickness_mult")
                 base_col.prop(s, "gate_base_height_mult")
@@ -200,6 +193,10 @@ def draw_main_panel(layout, context):
                 stair_col = box.column(align=True)
                 stair_col.prop(s, "tower_wall_stairs_enabled")
                 if s.tower_wall_stairs_enabled:
+                    if hasattr(active, "wp_wall_tower_stair_side"):
+                        stair_col.prop(active, "wp_wall_tower_stair_side")
+                    else:
+                        stair_col.prop(s, "tower_wall_stair_side")
                     stair_col.prop(s, "tower_wall_stair_length")
                     stair_col.prop(s, "tower_wall_stair_depth")
                     stair_col.prop(s, "tower_wall_stair_steps")
@@ -215,6 +212,7 @@ def draw_main_panel(layout, context):
             col.prop(s, "parapet_width")
             col.prop(s, "crenel_height")
             col.prop(s, "crenel_width")
+            col.prop(s, "crenel_top_width")
             col.prop(s, "crenel_gap")
             col.prop(s, "crenel_end_caps")
             col.prop(s, "parapet_drain_enabled")
@@ -245,6 +243,7 @@ def draw_main_panel(layout, context):
                     gcol.prop(s, "gate_wall_stair_depth")
                     gcol.prop(s, "gate_wall_stair_steps")
                 if s.gate_base_style == 'FORTIFIED':
+                    gcol.prop(s, "gate_tunnel_base_overhang")
                     gcol.prop(s, "gate_base_width_mult")
                     gcol.prop(s, "gate_base_thickness_mult")
                     gcol.prop(s, "gate_base_height_mult")
@@ -263,6 +262,7 @@ def draw_main_panel(layout, context):
                     tcol.prop(s, "tower_base_bottom_thickness_mult")
                     tcol.prop(s, "tower_wall_stairs_enabled")
                     if s.tower_wall_stairs_enabled:
+                        tcol.prop(s, "tower_wall_stair_side")
                         tcol.prop(s, "tower_wall_stair_length")
                         tcol.prop(s, "tower_wall_stair_depth")
                         tcol.prop(s, "tower_wall_stair_steps")

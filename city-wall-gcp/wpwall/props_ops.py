@@ -11,14 +11,15 @@ class WPWallWaypointRef(PropertyGroup):
 class WPWallSettings(PropertyGroup):
     wall_height: FloatProperty(name="Height", default=2.5, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     wall_thickness: FloatProperty(name="Wall Width", default=3.0, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
-    parapet_height: FloatProperty(name="Parapet Height", default=0.4, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
+    parapet_height: FloatProperty(name="Parapet Height", default=0.2, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     parapet_width: FloatProperty(name="Parapet Width", default=0.2, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
-    crenel_height: FloatProperty(name="Crenel Height", default=0.3, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
-    crenel_width: FloatProperty(name="Crenel Width", default=0.45, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
-    crenel_gap: FloatProperty(name="Crenel Gap", default=0.3, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
+    crenel_height: FloatProperty(name="Crenel Height", default=0.25, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
+    crenel_width: FloatProperty(name="Crenel Width", default=0.6, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    crenel_top_width: FloatProperty(name="Crenel Top Width", default=0.45, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    crenel_gap: FloatProperty(name="Crenel Gap", default=0.15, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     crenel_end_caps: BoolProperty(name="Crenels On Open Ends", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
     parapet_drain_enabled: BoolProperty(name="Drain Holes", default=True, update=lambda self, ctx: trigger_rebuild(ctx))
-    parapet_drain_size: FloatProperty(name="Drain Hole Size", default=0.12, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
+    parapet_drain_size: FloatProperty(name="Drain Hole Size", default=0.1, min=0.01, update=lambda self, ctx: trigger_rebuild(ctx))
     closed_loop: BoolProperty(name="Closed Loop", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
     auto_update: BoolProperty(name="Auto Update", default=True)
     wall_source: PointerProperty(name="Wall Source", type=bpy.types.Object, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -90,6 +91,7 @@ class WPWallSettings(PropertyGroup):
     gate_tunnel_height: FloatProperty(name="Tunnel Height", default=0.94, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_thickness: FloatProperty(name="Tunnel Thickness", default=0.14, min=0.01, max=0.45, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_tunnel_z_offset: FloatProperty(name="Tunnel Z Offset", default=0.03, update=lambda self, ctx: trigger_rebuild(ctx))
+    gate_tunnel_base_overhang: FloatProperty(name="Tunnel Base Overhang", default=0.0, min=0.0, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stairs_enabled: BoolProperty(name="Ground Stair", default=False, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_side: EnumProperty(name="Ground Stair Side", items=gate_stair_side_items(), default='INSIDE', update=lambda self, ctx: trigger_rebuild(ctx))
     gate_stair_length: FloatProperty(name="Ground Stair Length", default=1.6, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -103,6 +105,7 @@ class WPWallSettings(PropertyGroup):
     gate_wall_stair_depth: FloatProperty(name="Wall Stair Depth", default=0.6, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     gate_wall_stair_steps: IntProperty(name="Wall Stair Steps", default=7, min=1, max=64, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_wall_stairs_enabled: BoolProperty(name="Tower Wall Stair", default=True, update=lambda self, ctx: trigger_rebuild(ctx))
+    tower_wall_stair_side: EnumProperty(name="Tower Stair Side", items=tower_stair_side_items(), default='BOTH', update=lambda self, ctx: trigger_rebuild(ctx))
     tower_wall_stair_length: FloatProperty(name="Tower Stair Length", default=1.6, min=0.1, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_wall_stair_depth: FloatProperty(name="Tower Stair Depth", default=0.6, min=0.05, update=lambda self, ctx: trigger_rebuild(ctx))
     tower_wall_stair_steps: IntProperty(name="Tower Stair Steps", default=7, min=1, max=64, update=lambda self, ctx: trigger_rebuild(ctx))
@@ -589,6 +592,7 @@ class WPWALL_OT_add_tower(Operator):
         obj.show_in_front = True
         obj.show_name = True
         obj.hide_render = True
+        set_tower_stair_side(obj, scene.wp_wall_settings.tower_wall_stair_side)
         if obj.name not in coll.objects:
             coll.objects.link(obj)
             if obj.name in context.scene.collection.objects:
