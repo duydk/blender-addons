@@ -269,7 +269,7 @@ def _add_front_door_bay(collection, root, mats, name, x_mid, y, base_z, bay_widt
         add_box(collection, root, f"{name}_Door_Bar_{offset:+.2f}", (bar_x, y - panel_depth * 0.2, lower_bar_z), (0.035, panel_depth * 1.25, lower_bar_height), frame, "door_bar")
         add_box(collection, root, f"{name}_Top_Window_Bar_{offset:+.2f}", (bar_x, y - panel_depth * 0.2, upper_bar_z), (0.035, panel_depth * 1.25, upper_bar_height), frame, "window_bar")
 
-def _add_solid_wall_bay(collection, root, mats, name, location, size, lower_panel_height=None):
+def _add_solid_wall_bay(collection, root, mats, name, location, size, lower_panel_height=None, edge_frames=True):
     panel = _material(mats, "door", "trim")
     frame = _material(mats, "trim")
     dark = _material(mats, "glass", "door")
@@ -287,8 +287,9 @@ def _add_solid_wall_bay(collection, root, mats, name, location, size, lower_pane
     if sx >= sy:
         rail_size = (sx, sy * 1.15, rail_height)
         add_box(collection, root, f"{name}_Bottom_Rail", (x, y, bottom_z), rail_size, frame, "wall_frame")
-        add_box(collection, root, f"{name}_Left_Frame", (x - sx * 0.5, y, z), (0.045, sy * 1.2, sz), frame, "wall_frame")
-        add_box(collection, root, f"{name}_Right_Frame", (x + sx * 0.5, y, z), (0.045, sy * 1.2, sz), frame, "wall_frame")
+        if edge_frames:
+            add_box(collection, root, f"{name}_Left_Frame", (x - sx * 0.5, y, z), (0.045, sy * 1.2, sz), frame, "wall_frame")
+            add_box(collection, root, f"{name}_Right_Frame", (x + sx * 0.5, y, z), (0.045, sy * 1.2, sz), frame, "wall_frame")
         if window_height > 0.001:
             window_z = bottom_z + lower_height + window_height * 0.5
             bar_height = max(0.01, window_height - rail_height)
@@ -302,8 +303,9 @@ def _add_solid_wall_bay(collection, root, mats, name, location, size, lower_pane
     else:
         rail_size = (sx * 1.15, sy, rail_height)
         add_box(collection, root, f"{name}_Bottom_Rail", (x, y, bottom_z), rail_size, frame, "wall_frame")
-        add_box(collection, root, f"{name}_Front_Frame", (x, y - sy * 0.5, z), (sx * 1.2, 0.045, sz), frame, "wall_frame")
-        add_box(collection, root, f"{name}_Back_Frame", (x, y + sy * 0.5, z), (sx * 1.2, 0.045, sz), frame, "wall_frame")
+        if edge_frames:
+            add_box(collection, root, f"{name}_Front_Frame", (x, y - sy * 0.5, z), (sx * 1.2, 0.045, sz), frame, "wall_frame")
+            add_box(collection, root, f"{name}_Back_Frame", (x, y + sy * 0.5, z), (sx * 1.2, 0.045, sz), frame, "wall_frame")
         if window_height > 0.001:
             window_z = bottom_z + lower_height + window_height * 0.5
             bar_height = max(0.01, window_height - rail_height)
@@ -342,40 +344,262 @@ def _add_window_wall_bay(collection, root, mats, name, location, size):
             add_box(collection, root, f"{name}_Window_Bar_{offset:+.2f}", (x, y + sy * offset, z), (sx * 1.25, 0.035, bar_height), frame, "window_bar")
 
 
+def _add_corbel_arm(collection, root, name, center, length, depth, height, axis, material):
+    x, y, z = center
+    half_length = max(0.001, length) * 0.5
+    half_depth = max(0.001, depth) * 0.5
+    half_height = max(0.001, height) * 0.5
+    profile = (
+        (-half_length, half_height),
+        (half_length, half_height),
+        (half_length, -half_height * 0.10),
+        (half_length * 0.46, -half_height),
+        (-half_length * 0.46, -half_height),
+        (-half_length, -half_height * 0.10),
+    )
+    verts = []
+    for side in (-half_depth, half_depth):
+        for along, up in profile:
+            if axis == "x":
+                verts.append((x + along, y + side, z + up))
+            else:
+                verts.append((x + side, y + along, z + up))
+    faces = [
+        (0, 1, 2, 3, 4, 5),
+        (11, 10, 9, 8, 7, 6),
+    ]
+    for index in range(len(profile)):
+        next_index = (index + 1) % len(profile)
+        faces.append((index, next_index, next_index + len(profile), index + len(profile)))
+    return add_mesh(collection, root, name, verts, faces, material, "bracket_cap")
+
+
+def _add_u_bracket_support(collection, root, name, x, y, base_z, axis, span, depth, height, thickness, material):
+    if axis == "x":
+        bridge_size = (span + thickness, depth, thickness)
+        post_size = (thickness, depth, height)
+        for side in (-1.0, 1.0):
+            add_box(
+                collection,
+                root,
+                f"{name}_Post_{'L' if side < 0.0 else 'R'}",
+                (x + side * span * 0.5, y, base_z + thickness * 0.5 + height * 0.5),
+                post_size,
+                material,
+                "bracket_cap",
+            )
+    else:
+        bridge_size = (depth, span + thickness, thickness)
+        post_size = (depth, thickness, height)
+        for side in (-1.0, 1.0):
+            add_box(
+                collection,
+                root,
+                f"{name}_Post_{'F' if side < 0.0 else 'B'}",
+                (x, y + side * span * 0.5, base_z + thickness * 0.5 + height * 0.5),
+                post_size,
+                material,
+                "bracket_cap",
+            )
+    add_box(
+        collection,
+        root,
+        f"{name}_Bridge",
+        (x, y, base_z),
+        bridge_size,
+        material,
+        "bracket_cap",
+    )
+
+
+def _add_pillar_bracket_cap(collection, root, wood, name, x, y, top_z, column_radius, axes):
+    radius = max(0.02, float(column_radius))
+    vertical_scale = 2.0
+    base_block = radius * 2.75
+    lower_arm_length = radius * 6.4
+    upper_arm_length = radius * 8.0
+    arm_depth = radius * 1.7
+    arm_height = radius * 0.70 * vertical_scale
+    spacer_height = radius * 0.85 * vertical_scale
+    spacer_width = radius * 1.55
+    u_span = radius * 1.85
+    u_depth = radius * 1.02
+    u_height = radius * 1.08 * vertical_scale
+    u_thickness = radius * 0.24 * vertical_scale
+
+    add_box(
+        collection,
+        root,
+        f"{name}_Capital_Block",
+        (x, y, top_z - radius * 0.26 * vertical_scale),
+        (base_block, base_block, radius * 0.52 * vertical_scale),
+        wood,
+        "bracket_cap",
+    )
+    add_box(
+        collection,
+        root,
+        f"{name}_Center_Spacer",
+        (x, y, top_z + radius * 0.58 * vertical_scale),
+        (spacer_width, spacer_width, spacer_height),
+        wood,
+        "bracket_cap",
+    )
+
+    for axis in axes:
+        cross_axis = "y" if axis == "x" else "x"
+        _add_corbel_arm(
+            collection,
+            root,
+            f"{name}_Lower_Arm_{axis.upper()}",
+            (x, y, top_z + radius * 0.08 * vertical_scale),
+            lower_arm_length,
+            arm_depth,
+            arm_height,
+            axis,
+            wood,
+        )
+        _add_corbel_arm(
+            collection,
+            root,
+            f"{name}_Upper_Arm_{axis.upper()}",
+            (x, y, top_z + radius * 0.86 * vertical_scale),
+            upper_arm_length,
+            arm_depth * 0.92,
+            arm_height,
+            axis,
+            wood,
+        )
+        _add_corbel_arm(
+            collection,
+            root,
+            f"{name}_Cross_Arm_{cross_axis.upper()}",
+            (x, y, top_z + radius * 0.46 * vertical_scale),
+            lower_arm_length * 0.72,
+            arm_depth * 0.82,
+            arm_height * 0.78,
+            cross_axis,
+            wood,
+        )
+        for side in (-1.0, 1.0):
+            offset = side * radius * 2.15
+            support_x = x + offset if axis == "x" else x
+            support_y = y + offset if axis == "y" else y
+            _add_u_bracket_support(
+                collection,
+                root,
+                f"{name}_U_Support_{axis.upper()}_{'L' if side < 0.0 else 'R'}",
+                support_x,
+                support_y,
+                top_z + radius * 0.34 * vertical_scale,
+                axis,
+                u_span,
+                u_depth,
+                u_height,
+                u_thickness,
+                wood,
+            )
+
+
+def _add_wall_corner_posts(collection, root, material, name_prefix, width, depth, base_z, height, post_size, wall_offset):
+    z = base_z + height * 0.5
+    for x_side in (-1.0, 1.0):
+        for y_side in (-1.0, 1.0):
+            add_box(
+                collection,
+                root,
+                f"{name_prefix}_{'L' if x_side < 0.0 else 'R'}_{'F' if y_side < 0.0 else 'B'}",
+                (x_side * (width * 0.5 + wall_offset), y_side * (depth * 0.5 + wall_offset), z),
+                (post_size, post_size, height),
+                material,
+                "wall_corner_pillar",
+            )
+
+
 def _add_columns_and_beams(collection, root, mats, settings, platform_height):
     width = settings.building_width
     depth = settings.building_depth
+    legacy_overhang = _setting(settings, "eave_overhang", settings.roof_overhang)
+    overhang = _setting(settings, "lower_eave_overhang", legacy_overhang)
     bay_count = max(2, int(_setting(settings, "bay_count", 7)))
     side_bays = max(1, int(_setting(settings, "side_bay_count", 2)))
     column_radius = _setting(settings, "column_radius", 0.08)
     column_height = _setting(settings, "column_height", settings.floor_height)
     base_z = platform_height
-    column_z = base_z + column_height * 0.5
-    wood = _material(mats, "trim")
-
-    x_positions = _linspace(-width * 0.5, width * 0.5, bay_count + 1)
-    y_positions = _linspace(-depth * 0.5, depth * 0.5, side_bays + 2)
-
-    for x_index, x in enumerate(x_positions):
-        for y_index, y in enumerate(y_positions):
-            add_cylinder(
-                collection,
-                root,
-                f"BGCP_Hall_Column_{x_index:02d}_{y_index:02d}",
-                (x, y, column_z),
-                column_radius,
-                column_height,
-                wood,
-                "column",
-                vertices=28,
-            )
-
+    column_top_z = base_z + column_height
+    column_base_height = max(0.035, column_radius * 0.45)
+    column_body_height = max(0.1, column_height - column_base_height)
+    column_z = base_z + column_base_height + column_body_height * 0.5
     beam_height = 0.12
-    beam_z = base_z + column_height + beam_height * 0.5
-    for y_index, y in enumerate(y_positions):
-        add_box(collection, root, f"BGCP_Hall_Long_Beam_{y_index:02d}", (0.0, y, beam_z), (width + column_radius * 4.0, 0.12, beam_height), wood, "beam")
-    for x_index, x in enumerate(x_positions):
-        add_box(collection, root, f"BGCP_Hall_Cross_Beam_{x_index:02d}", (x, 0.0, beam_z), (0.12, depth + column_radius * 4.0, beam_height), wood, "beam")
+    wood = _material(mats, "trim")
+    stone = _material(mats, "wall")
+
+    roof_edge_width = width + overhang * 2.0
+    roof_edge_depth = depth + overhang * 2.0
+    pillar_edge_offset = _setting(settings, "round_pillar_offset", -column_radius * 3.0)
+    column_width = roof_edge_width + pillar_edge_offset * 2.0
+    column_depth = roof_edge_depth + pillar_edge_offset * 2.0
+    column_x_positions = _linspace(-column_width * 0.5, column_width * 0.5, bay_count + 1)
+    side_column_y_positions = _linspace(-column_depth * 0.5, column_depth * 0.5, side_bays + 2)
+    wall_x_positions = _linspace(-width * 0.5, width * 0.5, bay_count + 1)
+    wall_y_positions = _linspace(-depth * 0.5, depth * 0.5, side_bays + 2)
+
+    column_points = []
+    for x in column_x_positions:
+        column_points.append((x, -column_depth * 0.5))
+        column_points.append((x, column_depth * 0.5))
+    for y in side_column_y_positions[1:-1]:
+        column_points.append((-column_width * 0.5, y))
+        column_points.append((column_width * 0.5, y))
+
+    for index, (x, y) in enumerate(column_points):
+        add_cylinder(
+            collection,
+            root,
+            f"BGCP_Hall_Column_Stone_Base_{index:02d}",
+            (x, y, base_z + column_base_height * 0.5),
+            column_radius * 1.65,
+            column_base_height,
+            stone,
+            "column_base",
+            vertices=40,
+        )
+        add_cylinder(
+            collection,
+            root,
+            f"BGCP_Hall_Column_{index:02d}",
+            (x, y, column_z),
+            column_radius,
+            column_body_height,
+            wood,
+            "column",
+            vertices=28,
+        )
+        bracket_axes = []
+        if abs(abs(y) - column_depth * 0.5) < 0.001:
+            bracket_axes.append("x")
+        if abs(abs(x) - column_width * 0.5) < 0.001:
+            bracket_axes.append("y")
+        _add_pillar_bracket_cap(
+            collection,
+            root,
+            wood,
+            f"BGCP_Hall_Column_{index:02d}_Bracket",
+            x,
+            y,
+            column_top_z - column_radius * 1.45,
+            column_radius,
+            bracket_axes or ("x",),
+        )
+
+    bracket_top_z = column_top_z + column_radius * 1.63
+    long_beam_z = bracket_top_z + beam_height * 0.5 + _setting(settings, "horizontal_beam_z_offset", 0.0)
+    cross_beam_z = bracket_top_z + beam_height * 0.5 + _setting(settings, "cross_beam_z_offset", 0.0)
+    cross_beam_length = _setting(settings, "cross_beam_length", column_depth + column_radius * 4.0)
+    for y_index, y in enumerate((-column_depth * 0.5, column_depth * 0.5)):
+        add_box(collection, root, f"BGCP_Hall_Long_Beam_{y_index:02d}", (0.0, y, long_beam_z), (column_width + column_radius * 4.0, 0.12, beam_height), wood, "beam")
+    for x_index, x in enumerate(column_x_positions):
+        add_box(collection, root, f"BGCP_Hall_Cross_Beam_{x_index:02d}", (x, 0.0, cross_beam_z), (0.12, cross_beam_length, beam_height), wood, "beam")
 
     wall_base_z = base_z
     wall_height = max(0.1, column_height)
@@ -383,18 +607,49 @@ def _add_columns_and_beams(collection, root, mats, settings, platform_height):
     panel_depth = 0.06
     wall_overlap = column_radius * 1.4
     door_height = _setting(settings, "main_door_height", wall_height * 0.68)
-    for index in range(len(x_positions) - 1):
-        x_mid = (x_positions[index] + x_positions[index + 1]) * 0.5
-        bay_width = abs(x_positions[index + 1] - x_positions[index]) + wall_overlap
+    _add_wall_corner_posts(collection, root, wood, "BGCP_Hall_Wall_Corner_Pillar", width, depth, wall_base_z, wall_height + 0.16, max(0.10, column_radius * 1.45), 0.035)
+    for index in range(len(wall_x_positions) - 1):
+        x_mid = (wall_x_positions[index] + wall_x_positions[index + 1]) * 0.5
+        bay_width = abs(wall_x_positions[index + 1] - wall_x_positions[index]) + wall_overlap
         _add_front_door_bay(collection, root, mats, f"BGCP_Hall_Front_Bay_{index:02d}", x_mid, -depth * 0.5 - 0.035, wall_base_z, bay_width, wall_height, panel_depth, door_height)
-        _add_solid_wall_bay(collection, root, mats, f"BGCP_Hall_Back_Wall_{index:02d}", (x_mid, depth * 0.5 + 0.035, wall_z), (bay_width, panel_depth, wall_height), door_height)
+        _add_solid_wall_bay(collection, root, mats, f"BGCP_Hall_Back_Wall_{index:02d}", (x_mid, depth * 0.5 + 0.035, wall_z), (bay_width, panel_depth, wall_height), door_height, edge_frames=False)
+
+    for index, x in enumerate(wall_x_positions):
+        add_box(
+            collection,
+            root,
+            f"BGCP_Hall_Front_Old_Pillar_Frame_{index:02d}",
+            (x, -depth * 0.5 - 0.035 - panel_depth * 0.2, wall_z),
+            (0.045, panel_depth * 1.25, wall_height),
+            wood,
+            "wall_frame",
+        )
+        add_box(
+            collection,
+            root,
+            f"BGCP_Hall_Back_Old_Pillar_Frame_{index:02d}",
+            (x, depth * 0.5 + 0.035 + panel_depth * 0.2, wall_z),
+            (0.045, panel_depth * 1.25, wall_height),
+            wood,
+            "wall_frame",
+        )
 
     for side in (-1.0, 1.0):
         x = side * (width * 0.5 + 0.035)
-        for index in range(len(y_positions) - 1):
-            y_mid = (y_positions[index] + y_positions[index + 1]) * 0.5
-            bay_depth = abs(y_positions[index + 1] - y_positions[index]) + wall_overlap
-            _add_solid_wall_bay(collection, root, mats, f"BGCP_Hall_Side_Wall_{'L' if side < 0 else 'R'}_{index:02d}", (x, y_mid, wall_z), (panel_depth, bay_depth, wall_height), door_height)
+        for index in range(len(wall_y_positions) - 1):
+            y_mid = (wall_y_positions[index] + wall_y_positions[index + 1]) * 0.5
+            bay_depth = abs(wall_y_positions[index + 1] - wall_y_positions[index]) + wall_overlap
+            _add_solid_wall_bay(collection, root, mats, f"BGCP_Hall_Side_Wall_{'L' if side < 0 else 'R'}_{index:02d}", (x, y_mid, wall_z), (panel_depth, bay_depth, wall_height), door_height, edge_frames=False)
+        for index, y in enumerate(wall_y_positions):
+            add_box(
+                collection,
+                root,
+                f"BGCP_Hall_Side_Old_Pillar_Frame_{'L' if side < 0 else 'R'}_{index:02d}",
+                (x + side * panel_depth * 0.2, y, wall_z),
+                (panel_depth * 1.25, 0.045, wall_height),
+                wood,
+                "wall_frame",
+            )
 
     return base_z + column_height
 
@@ -575,41 +830,6 @@ def _add_poly_roof_seam(collection, root, mats, name, points, width=0.055, heigh
         _add_roof_seam(collection, root, mats, f"{name}_{index:02d}", points[index], points[index + 1], width, height, part_type)
 
 
-def _add_roof_edge_lines(collection, root, mats, settings, name_prefix, width, depth, z, bow):
-    line_width = _setting(settings, "roof_edge_line_width", 0.055)
-    line_height = _setting(settings, "roof_edge_line_height", 0.035)
-    hw, hd = width * 0.5, depth * 0.5
-    segments = 18
-
-    edges = {
-        "Front": [],
-        "Back": [],
-        "Left": [],
-        "Right": [],
-    }
-    for index in range(segments + 1):
-        u = index / segments
-        curve_offset = max(0.0, float(bow)) * sin(pi * u)
-        x = -hw + width * u
-        y = -hd + depth * u
-        edges["Front"].append((x, -hd + curve_offset, z))
-        edges["Back"].append((hw - width * u, hd - curve_offset, z))
-        edges["Left"].append((-hw + curve_offset, hd - depth * u, z))
-        edges["Right"].append((hw - curve_offset, y, z))
-
-    for side_name, points in edges.items():
-        _add_poly_roof_seam(
-            collection,
-            root,
-            mats,
-            f"{name_prefix}_Edge_Line_{side_name}",
-            points,
-            line_width,
-            line_height,
-            "roof_edge_line",
-        )
-
-
 def _curved_rect_ring(width, depth, z, bow, segments=16):
     hw, hd = width * 0.5, depth * 0.5
     points = []
@@ -647,10 +867,31 @@ def _add_flat_curved_underside(collection, root, mats, name, width, depth, z, bo
     add_mesh(collection, root, name, verts, faces, _material(mats, "trim"), "roof_underside")
 
 
+def _solidify_flat_strip(outer_row, inner_row, thickness):
+    thickness = max(0.001, float(thickness))
+    count = min(len(outer_row), len(inner_row))
+    outer_top = list(outer_row[:count])
+    inner_top = list(inner_row[:count])
+    outer_bottom = [(x, y, z - thickness) for x, y, z in outer_top]
+    inner_bottom = [(x, y, z - thickness) for x, y, z in inner_top]
+    verts = outer_top + inner_top + outer_bottom + inner_bottom
+    faces = []
+
+    for index in range(count - 1):
+        nxt = index + 1
+        faces.append((index, nxt, count + nxt, count + index))
+        faces.append((count * 2 + index, count * 3 + index, count * 3 + nxt, count * 2 + nxt))
+        faces.append((index, count * 2 + index, count * 2 + nxt, nxt))
+        faces.append((count + index, count + nxt, count * 3 + nxt, count * 3 + index))
+
+    faces.append((0, count, count * 3, count * 2))
+    faces.append((count - 1, count * 2 - 1, count * 4 - 1, count * 3 - 1))
+    return verts, faces
+
+
 def _add_flat_tier_underside(collection, root, mats, name, outer_width, outer_depth, inner_width, inner_depth, z, bow, thickness):
-    outer = _curved_rect_ring(outer_width, outer_depth, z, max(0.0, float(bow)))
-    inner = list(reversed(_curved_rect_ring(inner_width, inner_depth, z, 0.0)))
-    verts, faces = _solidify_flat_polygon(outer + inner, thickness)
+    points = _curved_rect_ring(outer_width, outer_depth, z, max(0.0, float(bow)))
+    verts, faces = _solidify_flat_polygon(points, thickness)
     add_mesh(collection, root, name, verts, faces, _material(mats, "trim"), "roof_underside")
 
 
@@ -721,139 +962,280 @@ def _add_upper_hip_roof_seams(collection, root, mats, settings, roof_width, roof
         _add_poly_roof_seam(collection, root, mats, f"BGCP_Hall_Upper_Roof_Hip_Seam_{suffix}", points, seam_width, seam_height)
 
 
-def _yellow_tile_material(segment_length=0.55):
+def _yellow_tile_material():
     color = (1.0, 0.72, 0.08, 1.0)
     mat = bpy.data.materials.get("BGCP_Roof_Tile_Yellow")
     if mat is None:
         mat = bpy.data.materials.new("BGCP_Roof_Tile_Yellow")
     mat.diffuse_color = color
     mat.use_nodes = True
-
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
     nodes.clear()
     output = nodes.new(type="ShaderNodeOutputMaterial")
     bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
-    wave = nodes.new(type="ShaderNodeTexWave")
-    ramp = nodes.new(type="ShaderNodeValToRGB")
-
-    output.location = (520, 0)
-    bsdf.location = (300, 0)
-    ramp.location = (80, 80)
-    wave.location = (-160, 80)
-
-    if hasattr(wave, "wave_type"):
-        wave.wave_type = 'BANDS'
-    if hasattr(wave, "bands_direction"):
-        wave.bands_direction = 'Z'
-    scale = max(0.2, 1.0 / max(0.12, float(segment_length)))
-    scale_input = wave.inputs.get("Scale")
-    distortion_input = wave.inputs.get("Distortion")
-    if scale_input is not None:
-        scale_input.default_value = scale
-    if distortion_input is not None:
-        distortion_input.default_value = 0.0
-
-    ramp.color_ramp.interpolation = 'CONSTANT'
-    ramp.color_ramp.elements[0].position = 0.0
-    ramp.color_ramp.elements[0].color = color
-    ramp.color_ramp.elements[1].position = 0.94
-    ramp.color_ramp.elements[1].color = (1.0, 0.88, 0.32, 1.0)
-    end_element = ramp.color_ramp.elements.new(0.985)
-    end_element.color = color
-
+    output.location = (300, 0)
+    bsdf.location = (80, 0)
     if bsdf is not None:
         base_color = bsdf.inputs.get("Base Color")
         roughness = bsdf.inputs.get("Roughness")
+        if base_color is not None:
+            base_color.default_value = color
         if roughness is not None:
             roughness.default_value = 0.48
-        if base_color is not None and ramp.outputs.get("Color") is not None:
-            links.new(ramp.outputs["Color"], base_color)
-        elif base_color is not None:
-            base_color.default_value = color
         surface = output.inputs.get("Surface")
         bsdf_output = bsdf.outputs.get("BSDF")
         if surface is not None and bsdf_output is not None:
             links.new(bsdf_output, surface)
-    wave_output = wave.outputs.get("Fac") or wave.outputs.get("Color")
-    if wave_output is not None and ramp.inputs.get("Fac") is not None:
-        links.new(wave_output, ramp.inputs["Fac"])
     return mat
 
 
-def _add_roof_tile_rib(collection, root, name, points, width, height, material):
+def _ying_tile_material():
+    color = (0.82, 0.58, 0.07, 1.0)
+    mat = bpy.data.materials.get("BGCP_Roof_Tile_Ying_Yellow")
+    if mat is None:
+        mat = bpy.data.materials.new("BGCP_Roof_Tile_Ying_Yellow")
+    mat.diffuse_color = color
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+    output = nodes.new(type="ShaderNodeOutputMaterial")
+    bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
+    output.location = (300, 0)
+    bsdf.location = (80, 0)
+    if bsdf is not None:
+        base_color = bsdf.inputs.get("Base Color")
+        roughness = bsdf.inputs.get("Roughness")
+        if base_color is not None:
+            base_color.default_value = color
+        if roughness is not None:
+            roughness.default_value = 0.52
+        surface = output.inputs.get("Surface")
+        bsdf_output = bsdf.outputs.get("BSDF")
+        if surface is not None and bsdf_output is not None:
+            links.new(bsdf_output, surface)
+    return mat
+
+
+def _path_length_3d(points):
+    length = 0.0
+    for index in range(len(points) - 1):
+        x1, y1, z1 = points[index]
+        x2, y2, z2 = points[index + 1]
+        dx = x2 - x1
+        dy = y2 - y1
+        dz = z2 - z1
+        length += sqrt(dx * dx + dy * dy + dz * dz)
+    return length
+
+
+def _point_tangent_at_distance(points, distance):
+    remaining = max(0.0, float(distance))
+    for index in range(len(points) - 1):
+        x1, y1, z1 = points[index]
+        x2, y2, z2 = points[index + 1]
+        dx = x2 - x1
+        dy = y2 - y1
+        dz = z2 - z1
+        segment_length = sqrt(dx * dx + dy * dy + dz * dz)
+        if segment_length <= 0.001:
+            continue
+        if remaining <= segment_length:
+            t = remaining / segment_length
+            return (
+                x1 + dx * t,
+                y1 + dy * t,
+                z1 + dz * t,
+                dx / segment_length,
+                dy / segment_length,
+                dz / segment_length,
+            )
+        remaining -= segment_length
+
+    x1, y1, z1 = points[-2]
+    x2, y2, z2 = points[-1]
+    dx = x2 - x1
+    dy = y2 - y1
+    dz = z2 - z1
+    segment_length = max(0.001, sqrt(dx * dx + dy * dy + dz * dz))
+    return (x2, y2, z2, dx / segment_length, dy / segment_length, dz / segment_length)
+
+
+def _add_roof_tile_rib(collection, root, name, points, width, height, thickness, z_offset, segment_length, material):
     if len(points) < 2:
         return
 
     width = max(0.02, float(width))
     height = max(0.01, float(height))
-    cross_segments = 6
+    thickness = max(0.005, float(thickness))
+    segment_length = max(0.12, float(segment_length))
+    overlap = min(segment_length * 0.22, max(0.045, height * 0.9))
+    tile_length = segment_length + overlap
+    path_length = _path_length_3d(points)
+    if path_length <= 0.001:
+        return
+
+    cross_segments = 8
     verts = []
     faces = []
 
-    for index, point in enumerate(points):
-        if index == 0:
-            other = points[1]
-            dx = other[0] - point[0]
-            dy = other[1] - point[1]
-        elif index == len(points) - 1:
-            other = points[index - 1]
-            dx = point[0] - other[0]
-            dy = point[1] - other[1]
-        else:
-            prev_point = points[index - 1]
-            next_point = points[index + 1]
-            dx = next_point[0] - prev_point[0]
-            dy = next_point[1] - prev_point[1]
-        length = max(0.001, sqrt(dx * dx + dy * dy))
-        off_x = -dy / length
-        off_y = dx / length
-
-        x, y, z = point
-        for segment in range(cross_segments + 1):
-            angle = pi - (pi * segment / cross_segments)
-            offset = cos(angle) * width * 0.5
-            lift = sin(angle) * height
-            verts.append((x + off_x * offset, y + off_y * offset, z + 0.018 + lift))
-
     row_size = cross_segments + 1
-    for index in range(len(points) - 1):
-        row_start = index * row_size
-        next_start = row_start + row_size
-        for segment in range(cross_segments):
-            faces.append((row_start + segment, row_start + segment + 1, next_start + segment + 1, next_start + segment))
-    faces.append(tuple(range(row_size - 1, -1, -1)))
-    last_start = (len(points) - 1) * row_size
-    faces.append(tuple(range(last_start, last_start + row_size)))
-    add_mesh(collection, root, name, verts, faces, material, "roof_tile_rib")
+    start_distance = 0.0
+    while start_distance < path_length - 0.05:
+        end_distance = min(start_distance + tile_length, path_length)
+        actual_length = end_distance - start_distance
+        if actual_length < min(0.08, tile_length * 0.35):
+            break
+
+        center_distance = start_distance + actual_length * 0.5
+        x, y, z, tangent_x, tangent_y, tangent_z = _point_tangent_at_distance(points, center_distance)
+        tangent_xy_length = max(0.001, sqrt(tangent_x * tangent_x + tangent_y * tangent_y))
+        off_x = -tangent_y / tangent_xy_length
+        off_y = tangent_x / tangent_xy_length
+
+        top_rows = []
+        for row_index, along in enumerate((-actual_length * 0.5, actual_length * 0.5)):
+            row_x = x + tangent_x * along
+            row_y = y + tangent_y * along
+            row_z = z + tangent_z * along
+            lip_lift = height * 0.28 if row_index == 0 else 0.0
+            row = []
+
+            for cross_index in range(row_size):
+                angle = pi - (pi * cross_index / cross_segments)
+                offset = cos(angle) * width * 0.5
+                lift = sin(angle) * height
+                row.append((row_x + off_x * offset, row_y + off_y * offset, row_z + 0.018 + z_offset + lift + lip_lift))
+            top_rows.append(row)
+
+        for row in top_rows:
+            verts.extend(row)
+
+        tile_start = len(verts) - row_size * 2
+        next_row_start = tile_start + row_size
+        for cross_index in range(cross_segments):
+            faces.append((tile_start + cross_index, tile_start + cross_index + 1, next_row_start + cross_index + 1, next_row_start + cross_index))
+
+        start_distance += segment_length
+
+    if not verts:
+        return None
+    obj = add_mesh(collection, root, name, verts, faces, material, "roof_tile_rib")
+    solidify = obj.modifiers.new(name="Tile Thickness", type='SOLIDIFY')
+    solidify.thickness = thickness
+    solidify.offset = -1.0
+    if hasattr(solidify, "use_even_offset"):
+        solidify.use_even_offset = True
+    if hasattr(solidify, "use_quality_normals"):
+        solidify.use_quality_normals = True
+    return obj
 
 
-def _add_roof_tile_cap(collection, root, name, point, side_name, radius, thickness, material):
+def _add_roof_ying_tile(collection, root, name, points, width, height, thickness, segment_length, material):
+    if len(points) < 2:
+        return
+
+    width = max(0.02, float(width))
+    height = max(0.01, float(height))
+    thickness = max(0.005, float(thickness))
+    segment_length = max(0.12, float(segment_length))
+    overlap = min(segment_length * 0.18, max(0.035, height * 0.8))
+    tile_length = segment_length + overlap
+    path_length = _path_length_3d(points)
+    if path_length <= 0.001:
+        return
+
+    cross_segments = 8
+    verts = []
+    faces = []
+    row_size = cross_segments + 1
+    start_distance = 0.0
+
+    while start_distance < path_length - 0.05:
+        end_distance = min(start_distance + tile_length, path_length)
+        actual_length = end_distance - start_distance
+        if actual_length < min(0.08, tile_length * 0.35):
+            break
+
+        center_distance = start_distance + actual_length * 0.5
+        x, y, z, tangent_x, tangent_y, tangent_z = _point_tangent_at_distance(points, center_distance)
+        tangent_xy_length = max(0.001, sqrt(tangent_x * tangent_x + tangent_y * tangent_y))
+        off_x = -tangent_y / tangent_xy_length
+        off_y = tangent_x / tangent_xy_length
+
+        top_rows = []
+        for row_index, along in enumerate((-actual_length * 0.5, actual_length * 0.5)):
+            row_x = x + tangent_x * along
+            row_y = y + tangent_y * along
+            row_z = z + tangent_z * along
+            lip_lift = height * 0.18 if row_index == 0 else 0.0
+            row = []
+
+            for cross_index in range(row_size):
+                angle = pi - (pi * cross_index / cross_segments)
+                offset = cos(angle) * width * 0.5
+                lift = (1.0 - sin(angle)) * height
+                row.append((row_x + off_x * offset, row_y + off_y * offset, row_z + 0.012 + lift + lip_lift))
+            top_rows.append(row)
+
+        for row in top_rows:
+            verts.extend(row)
+
+        tile_start = len(verts) - row_size * 2
+        next_row_start = tile_start + row_size
+        for cross_index in range(cross_segments):
+            faces.append((tile_start + cross_index, tile_start + cross_index + 1, next_row_start + cross_index + 1, next_row_start + cross_index))
+
+        start_distance += segment_length
+
+    if not verts:
+        return None
+    obj = add_mesh(collection, root, name, verts, faces, material, "roof_ying_tile")
+    solidify = obj.modifiers.new(name="Tile Thickness", type='SOLIDIFY')
+    solidify.thickness = thickness
+    solidify.offset = -1.0
+    if hasattr(solidify, "use_even_offset"):
+        solidify.use_even_offset = True
+    if hasattr(solidify, "use_quality_normals"):
+        solidify.use_quality_normals = True
+    return obj
+
+
+def _add_roof_tile_cap(collection, root, name, points, radius, thickness, z_offset, material):
+    if len(points) < 2:
+        return
+
     radius = max(0.03, float(radius))
     thickness = max(0.01, float(thickness))
     segments = 18
-    x, y, z = point
-    z += radius * 0.72
-
-    if side_name == "front":
-        normal = (0.0, -1.0)
-    elif side_name == "back":
-        normal = (0.0, 1.0)
-    elif side_name == "left":
-        normal = (-1.0, 0.0)
-    else:
-        normal = (1.0, 0.0)
+    x, y, z = points[0]
+    _px, _py, _pz, tangent_x, tangent_y, tangent_z = _point_tangent_at_distance(points, 0.0)
+    tangent_length = max(0.001, sqrt(tangent_x * tangent_x + tangent_y * tangent_y + tangent_z * tangent_z))
+    tangent = (tangent_x / tangent_length, tangent_y / tangent_length, tangent_z / tangent_length)
+    tangent_xy_length = max(0.001, sqrt(tangent[0] * tangent[0] + tangent[1] * tangent[1]))
+    cross_axis = (-tangent[1] / tangent_xy_length, tangent[0] / tangent_xy_length, 0.0)
+    vertical_axis = (
+        cross_axis[1] * tangent[2] - cross_axis[2] * tangent[1],
+        cross_axis[2] * tangent[0] - cross_axis[0] * tangent[2],
+        cross_axis[0] * tangent[1] - cross_axis[1] * tangent[0],
+    )
+    vertical_length = max(0.001, sqrt(vertical_axis[0] * vertical_axis[0] + vertical_axis[1] * vertical_axis[1] + vertical_axis[2] * vertical_axis[2]))
+    vertical_axis = (vertical_axis[0] / vertical_length, vertical_axis[1] / vertical_length, vertical_axis[2] / vertical_length)
+    center = (x, y, z + radius * 0.72 + z_offset)
 
     verts = []
     for depth_side in (-0.5, 0.5):
         for index in range(segments):
             angle = (index / segments) * pi * 2.0
-            horizontal = cos(angle) * radius
+            across = cos(angle) * radius
             vertical = sin(angle) * radius
-            if normal[0] == 0.0:
-                verts.append((x + horizontal, y + normal[1] * thickness * depth_side, z + vertical))
-            else:
-                verts.append((x + normal[0] * thickness * depth_side, y + horizontal, z + vertical))
+            depth = thickness * depth_side
+            verts.append((
+                center[0] + cross_axis[0] * across + vertical_axis[0] * vertical + tangent[0] * depth,
+                center[1] + cross_axis[1] * across + vertical_axis[1] * vertical + tangent[1] * depth,
+                center[2] + cross_axis[2] * across + vertical_axis[2] * vertical + tangent[2] * depth,
+            ))
 
     faces = [tuple(range(segments - 1, -1, -1)), tuple(range(segments, segments * 2))]
     for index in range(segments):
@@ -872,84 +1254,143 @@ def _tile_centers(span, tile_width, tile_gap):
     return [start + spacing * index for index in range(count)]
 
 
-def _add_roof_tiles_from_paths(collection, root, name_prefix, paths, cap_points, settings):
+def _safe_tile_centers(span, tile_width, tile_gap, safe_distance):
+    safe_span = max(tile_width, float(span) - max(0.0, float(safe_distance)) * 2.0)
+    return _tile_centers(safe_span, tile_width, tile_gap)
+
+
+def _ying_tile_centers(span, tile_width, tile_gap):
+    centers = _tile_centers(span, tile_width, tile_gap)
+    return [(centers[index] + centers[index + 1]) * 0.5 for index in range(len(centers) - 1)]
+
+
+def _safe_ying_tile_centers(span, tile_width, tile_gap, safe_distance):
+    centers = _safe_tile_centers(span, tile_width, tile_gap, safe_distance)
+    return [(centers[index] + centers[index + 1]) * 0.5 for index in range(len(centers) - 1)]
+
+
+def _add_roof_tiles_from_paths(collection, root, name_prefix, paths, settings, ying_paths=None):
     if not _setting(settings, "roof_tiles_enabled", True):
         return
 
-    rib_width = _setting(settings, "roof_tile_rib_width", 0.16)
-    rib_height = _setting(settings, "roof_tile_rib_height", 0.07)
+    ying_radius = _setting(settings, "roof_ying_tile_radius", _setting(settings, "roof_tile_rib_width", 0.16) * 0.5)
+    yang_radius = _setting(settings, "roof_yang_tile_radius", _setting(settings, "roof_tile_rib_width", 0.16) * 0.45)
+    ying_width = ying_radius * 2.0
+    yang_width = yang_radius * 2.0
+    ying_height = ying_radius
+    yang_height = yang_radius * 0.72
+    tile_thickness = _setting(settings, "roof_tile_thickness", 0.025)
+    ying_z_offset = _setting(settings, "roof_ying_tile_z_offset", 0.0)
     segment_length = _setting(settings, "roof_tile_segment_length", 0.55)
-    material = _yellow_tile_material(segment_length)
-    cap_radius = _setting(settings, "roof_tile_cap_radius", 0.11)
-    cap_thickness = max(0.035, rib_width * 0.45)
+    material = _yellow_tile_material()
+    ying_material = _ying_tile_material()
+    cap_radius = ying_radius + tile_thickness
+    cap_thickness = max(0.035, ying_width * 0.45)
 
     for index, points in enumerate(paths):
         name = f"{name_prefix}_Tile_Rib_{index:02d}"
-        _add_roof_tile_rib(collection, root, name, points, rib_width, rib_height, material)
-    for index, (point, side_name) in enumerate(cap_points):
-        _add_roof_tile_cap(collection, root, f"{name_prefix}_Tile_Cap_{index:02d}", point, side_name, cap_radius, cap_thickness, material)
+        _add_roof_tile_rib(collection, root, name, points, ying_width, ying_height, tile_thickness, ying_z_offset, segment_length, ying_material)
+    for index, points in enumerate(ying_paths or ()):
+        name = f"{name_prefix}_Ying_Tile_{index:02d}"
+        _add_roof_ying_tile(collection, root, name, points, yang_width, yang_height, tile_thickness, segment_length, material)
+    for index, points in enumerate(paths):
+        _add_roof_tile_cap(collection, root, f"{name_prefix}_Tile_Cap_{index:02d}", points, cap_radius, cap_thickness, ying_z_offset, ying_material)
 
 
 def _add_lower_roof_tiles(collection, root, settings, outer_width, outer_depth, inner_width, inner_depth, base_z, top_z, curve):
-    tile_width = _setting(settings, "roof_tile_rib_width", 0.16)
+    ying_radius = _setting(settings, "roof_ying_tile_radius", _setting(settings, "roof_tile_rib_width", 0.16) * 0.5)
+    yang_radius = _setting(settings, "roof_yang_tile_radius", _setting(settings, "roof_tile_rib_width", 0.16) * 0.45)
+    tile_width = max(ying_radius, yang_radius) * 2.0
     tile_gap = _setting(settings, "roof_tile_gap", 0.10)
+    safe_distance = _setting(settings, "roof_tile_safe_distance", 0.08)
     outer_hw, outer_hd = outer_width * 0.5, outer_depth * 0.5
     inner_hw, inner_hd = inner_width * 0.5, inner_depth * 0.5
     curve_amount = max(0.0, float(curve))
     curve_power = 1.0 + curve_amount * 2.4
     segments = 5
     t_end = 1.0
+    boundary_clearance = safe_distance + tile_width * 0.05
     paths = []
-    cap_points = []
+    ying_paths = []
 
     def roof_z(t):
         return base_z + (top_z - base_z) * (t ** curve_power)
 
     for side_name, y_side in (("front", -1.0), ("back", 1.0)):
-        for x_const in _tile_centers(outer_width, tile_width, tile_gap):
+        for x_const in _safe_tile_centers(outer_width, tile_width, tile_gap, safe_distance):
             max_t = t_end
             if abs(x_const) > inner_hw and outer_hw > inner_hw:
-                max_t = min(t_end, max(0.12, (outer_hw - abs(x_const)) / (outer_hw - inner_hw)))
+                max_t = min(t_end, max(0.12, (outer_hw - abs(x_const) - boundary_clearance) / (outer_hw - inner_hw)))
+            start_t = min(max_t - 0.01, max(0.0, boundary_clearance / max(0.001, outer_hd - inner_hd)))
             points = []
             for segment in range(segments + 1):
-                t = max_t * segment / segments
+                t = start_t + (max_t - start_t) * segment / segments
                 half_depth = outer_hd + (inner_hd - outer_hd) * t
                 x = x_const
                 y = y_side * half_depth
                 points.append((x, y, roof_z(t)))
             paths.append(points)
-            cap_points.append((points[0], side_name))
-
-    for side_name, x_side in (("left", -1.0), ("right", 1.0)):
-        for y_const in _tile_centers(outer_depth, tile_width, tile_gap):
+        for x_const in _safe_ying_tile_centers(outer_width, tile_width, tile_gap, safe_distance):
             max_t = t_end
-            if abs(y_const) > inner_hd and outer_hd > inner_hd:
-                max_t = min(t_end, max(0.12, (outer_hd - abs(y_const)) / (outer_hd - inner_hd)))
+            if abs(x_const) > inner_hw and outer_hw > inner_hw:
+                max_t = min(t_end, max(0.12, (outer_hw - abs(x_const) - boundary_clearance) / (outer_hw - inner_hw)))
+            start_t = min(max_t - 0.01, max(0.0, boundary_clearance / max(0.001, outer_hd - inner_hd)))
             points = []
             for segment in range(segments + 1):
-                t = max_t * segment / segments
+                t = start_t + (max_t - start_t) * segment / segments
+                half_depth = outer_hd + (inner_hd - outer_hd) * t
+                x = x_const
+                y = y_side * half_depth
+                points.append((x, y, roof_z(t)))
+            ying_paths.append(points)
+
+    for side_name, x_side in (("left", -1.0), ("right", 1.0)):
+        for y_const in _safe_tile_centers(outer_depth, tile_width, tile_gap, safe_distance):
+            max_t = t_end
+            if abs(y_const) > inner_hd and outer_hd > inner_hd:
+                max_t = min(t_end, max(0.12, (outer_hd - abs(y_const) - boundary_clearance) / (outer_hd - inner_hd)))
+            start_t = min(max_t - 0.01, max(0.0, boundary_clearance / max(0.001, outer_hw - inner_hw)))
+            points = []
+            for segment in range(segments + 1):
+                t = start_t + (max_t - start_t) * segment / segments
                 half_width = outer_hw + (inner_hw - outer_hw) * t
                 x = x_side * half_width
                 y = y_const
                 points.append((x, y, roof_z(t)))
             paths.append(points)
-            cap_points.append((points[0], side_name))
+        for y_const in _safe_ying_tile_centers(outer_depth, tile_width, tile_gap, safe_distance):
+            max_t = t_end
+            if abs(y_const) > inner_hd and outer_hd > inner_hd:
+                max_t = min(t_end, max(0.12, (outer_hd - abs(y_const) - boundary_clearance) / (outer_hd - inner_hd)))
+            start_t = min(max_t - 0.01, max(0.0, boundary_clearance / max(0.001, outer_hw - inner_hw)))
+            points = []
+            for segment in range(segments + 1):
+                t = start_t + (max_t - start_t) * segment / segments
+                half_width = outer_hw + (inner_hw - outer_hw) * t
+                x = x_side * half_width
+                y = y_const
+                points.append((x, y, roof_z(t)))
+            ying_paths.append(points)
 
-    _add_roof_tiles_from_paths(collection, root, "BGCP_Hall_Lower_Roof", paths, cap_points, settings)
+    _add_roof_tiles_from_paths(collection, root, "BGCP_Hall_Lower_Roof", paths, settings, ying_paths)
 
 
 def _add_upper_roof_tiles(collection, root, settings, roof_width, roof_depth, base_z, roof_height, curve, ridge_ratio, gable_push):
-    tile_width = _setting(settings, "roof_tile_rib_width", 0.16)
+    ying_radius = _setting(settings, "roof_ying_tile_radius", _setting(settings, "roof_tile_rib_width", 0.16) * 0.5)
+    yang_radius = _setting(settings, "roof_yang_tile_radius", _setting(settings, "roof_tile_rib_width", 0.16) * 0.45)
+    tile_width = max(ying_radius, yang_radius) * 2.0
     tile_gap = _setting(settings, "roof_tile_gap", 0.10)
+    safe_distance = _setting(settings, "roof_tile_safe_distance", 0.08)
     hw, hd = roof_width * 0.5, roof_depth * 0.5
     ridge_half = hw * max(0.15, min(0.92, ridge_ratio))
     curve_amount = max(0.0, float(curve))
     curve_power = 1.0 + curve_amount * 2.4
     segments = 5
-    t_end = 1.0
-    side_tile_t_end = round(8 * 0.58) / 8
+    t_end = max(0.12, 1.0 - safe_distance / max(0.001, hd))
+    side_tile_t_end = max(0.12, round(8 * 0.58) / 8 - safe_distance / max(0.001, hd))
+    boundary_clearance = safe_distance + tile_width * 0.05
     paths = []
-    cap_points = []
+    ying_paths = []
 
     def roof_z(t):
         return base_z + roof_height * (t ** curve_power)
@@ -967,48 +1408,73 @@ def _add_upper_roof_tiles(collection, root, settings, roof_width, roof_depth, ba
 
     def max_front_t_for_x(x):
         left, right = front_row_bounds(t_end)
-        if left <= x <= right:
+        if left + boundary_clearance <= x <= right - boundary_clearance:
             return t_end
         low, high = 0.0, t_end
         for _ in range(14):
             mid = (low + high) * 0.5
             left, right = front_row_bounds(mid)
-            if left <= x <= right:
+            if left + boundary_clearance <= x <= right - boundary_clearance:
                 low = mid
             else:
                 high = mid
         return max(0.12, low)
 
     for side_name, y_side in (("front", -1.0), ("back", 1.0)):
-        for x_const in _tile_centers(roof_width, tile_width, tile_gap):
+        for x_const in _safe_tile_centers(roof_width, tile_width, tile_gap, safe_distance):
             max_t = max_front_t_for_x(x_const)
+            start_t = min(max_t - 0.01, max(0.0, safe_distance / max(0.001, hd)))
             points = []
             for segment in range(segments + 1):
-                t = max_t * segment / segments
+                t = start_t + (max_t - start_t) * segment / segments
                 front_back_y = y_side * hd * (1.0 - t)
                 x = x_const
                 y = front_back_y
                 points.append((x, y, roof_z(t)))
             paths.append(points)
-            cap_points.append((points[0], side_name))
-
-    for side_name, x_side in (("left", -1.0), ("right", 1.0)):
-        for y_const in _tile_centers(roof_depth, tile_width, tile_gap):
-            max_t = side_tile_t_end
-            if abs(y_const) > hd * (1.0 - side_tile_t_end):
-                max_t = min(side_tile_t_end, max(0.12, 1.0 - abs(y_const) / hd))
+        for x_const in _safe_ying_tile_centers(roof_width, tile_width, tile_gap, safe_distance):
+            max_t = max_front_t_for_x(x_const)
+            start_t = min(max_t - 0.01, max(0.0, safe_distance / max(0.001, hd)))
             points = []
             for segment in range(segments + 1):
-                t = max_t * segment / segments
+                t = start_t + (max_t - start_t) * segment / segments
+                front_back_y = y_side * hd * (1.0 - t)
+                x = x_const
+                y = front_back_y
+                points.append((x, y, roof_z(t)))
+            ying_paths.append(points)
+
+    for side_name, x_side in (("left", -1.0), ("right", 1.0)):
+        for y_const in _safe_tile_centers(roof_depth, tile_width, tile_gap, safe_distance):
+            max_t = side_tile_t_end
+            if abs(y_const) > hd * (1.0 - side_tile_t_end):
+                max_t = min(side_tile_t_end, max(0.12, 1.0 - (abs(y_const) + boundary_clearance) / hd))
+            start_t = min(max_t - 0.01, max(0.0, boundary_clearance / max(0.001, hw - ridge_half)))
+            points = []
+            for segment in range(segments + 1):
+                t = start_t + (max_t - start_t) * segment / segments
                 side_y = hd * (1.0 - t)
                 side_x = x_side * (hw + (ridge_half - hw) * t)
                 x = side_x + x_side * gable_offset(t)
                 y = y_const
                 points.append((x, y, roof_z(t)))
             paths.append(points)
-            cap_points.append((points[0], side_name))
+        for y_const in _safe_ying_tile_centers(roof_depth, tile_width, tile_gap, safe_distance):
+            max_t = side_tile_t_end
+            if abs(y_const) > hd * (1.0 - side_tile_t_end):
+                max_t = min(side_tile_t_end, max(0.12, 1.0 - (abs(y_const) + boundary_clearance) / hd))
+            start_t = min(max_t - 0.01, max(0.0, boundary_clearance / max(0.001, hw - ridge_half)))
+            points = []
+            for segment in range(segments + 1):
+                t = start_t + (max_t - start_t) * segment / segments
+                side_y = hd * (1.0 - t)
+                side_x = x_side * (hw + (ridge_half - hw) * t)
+                x = side_x + x_side * gable_offset(t)
+                y = y_const
+                points.append((x, y, roof_z(t)))
+            ying_paths.append(points)
 
-    _add_roof_tiles_from_paths(collection, root, "BGCP_Hall_Upper_Roof", paths, cap_points, settings)
+    _add_roof_tiles_from_paths(collection, root, "BGCP_Hall_Upper_Roof", paths, settings, ying_paths)
 
 
 def _tier_roof_mesh(outer_width, outer_depth, inner_width, inner_depth, base_z, top_z, thickness, eave_curve):
@@ -1102,37 +1568,39 @@ def _add_upper_body(collection, root, mats, settings, base_z, width, depth, lowe
             "upper_platform_skirt",
         )
 
-    column_z = base_z + deck_height + height * 0.5
-    x_positions = _linspace(-width * 0.5, width * 0.5, bay_count + 1)
-    y_positions = (-depth * 0.5, depth * 0.5)
-    for x_index, x in enumerate(x_positions):
-        for y_index, y in enumerate(y_positions):
-            add_cylinder(
-                collection,
-                root,
-                f"BGCP_Hall_Upper_Column_{x_index:02d}_{y_index:02d}",
-                (x, y, column_z),
-                column_radius,
-                height,
-                wood,
-                "upper_column",
-                vertices=24,
-            )
-
-    beam_z = base_z + deck_height + height + 0.06
-    for y_index, y in enumerate(y_positions):
-        add_box(collection, root, f"BGCP_Hall_Upper_Long_Beam_{y_index:02d}", (0.0, y, beam_z), (width + column_radius * 4.0, 0.09, 0.12), wood, "upper_beam")
+    wall_x_positions = _linspace(-width * 0.5, width * 0.5, bay_count + 1)
 
     wall_base_z = base_z + deck_height
     wall_height = max(0.1, height)
     wall_z = wall_base_z + wall_height * 0.5
     panel_depth = 0.05
     wall_overlap = column_radius * 1.4
-    for index in range(len(x_positions) - 1):
-        x_mid = (x_positions[index] + x_positions[index + 1]) * 0.5
-        bay_width = abs(x_positions[index + 1] - x_positions[index]) + wall_overlap
+    _add_wall_corner_posts(collection, root, wood, "BGCP_Hall_Upper_Wall_Corner_Pillar", width, depth, wall_base_z, wall_height + 0.08, max(0.075, column_radius * 1.45), 0.03)
+    for index in range(len(wall_x_positions) - 1):
+        x_mid = (wall_x_positions[index] + wall_x_positions[index + 1]) * 0.5
+        bay_width = abs(wall_x_positions[index + 1] - wall_x_positions[index]) + wall_overlap
         _add_window_wall_bay(collection, root, mats, f"BGCP_Hall_Upper_Front_Window_{index:02d}", (x_mid, -depth * 0.5 - 0.03, wall_z), (bay_width, panel_depth, wall_height))
         _add_window_wall_bay(collection, root, mats, f"BGCP_Hall_Upper_Back_Window_{index:02d}", (x_mid, depth * 0.5 + 0.03, wall_z), (bay_width, panel_depth, wall_height))
+
+    for index, x in enumerate(wall_x_positions):
+        add_box(
+            collection,
+            root,
+            f"BGCP_Hall_Upper_Front_Old_Pillar_Frame_{index:02d}",
+            (x, -depth * 0.5 - 0.03, wall_z),
+            (0.045, panel_depth * 1.2, wall_height),
+            wood,
+            "upper_wall_frame",
+        )
+        add_box(
+            collection,
+            root,
+            f"BGCP_Hall_Upper_Back_Old_Pillar_Frame_{index:02d}",
+            (x, depth * 0.5 + 0.03, wall_z),
+            (0.045, panel_depth * 1.2, wall_height),
+            wood,
+            "upper_wall_frame",
+        )
 
     for side in (-1.0, 1.0):
         x = side * (width * 0.5 + 0.03)
@@ -1144,7 +1612,9 @@ def _add_upper_body(collection, root, mats, settings, base_z, width, depth, lowe
 def _add_layered_roof(collection, root, mats, settings, column_top_z):
     width = settings.building_width
     depth = settings.building_depth
-    overhang = _setting(settings, "eave_overhang", settings.roof_overhang)
+    legacy_overhang = _setting(settings, "eave_overhang", settings.roof_overhang)
+    lower_overhang = _setting(settings, "lower_eave_overhang", legacy_overhang)
+    upper_overhang = _setting(settings, "upper_eave_overhang", legacy_overhang * 0.6)
     curve = _setting(settings, "roof_curve", 0.18)
     tile = _material(mats, "roof")
     trim = _material(mats, "trim")
@@ -1158,8 +1628,8 @@ def _add_layered_roof(collection, root, mats, settings, column_top_z):
     upper_body_depth = depth * 0.72
     upper_body_base_z = lower_z + lower_height
 
-    lower_outer_width = width + overhang * 2.0
-    lower_outer_depth = depth + overhang * 2.0
+    lower_outer_width = width + lower_overhang * 2.0
+    lower_outer_depth = depth + lower_overhang * 2.0
     lower_roof_thickness = 0.18
     verts, faces = _tier_roof_mesh(lower_outer_width, lower_outer_depth, upper_body_width, upper_body_depth, lower_z, upper_body_base_z, lower_roof_thickness, curve)
     add_mesh(collection, root, "BGCP_Hall_Lower_Roof", verts, faces, tile, "roof_lower")
@@ -1172,8 +1642,8 @@ def _add_layered_roof(collection, root, mats, settings, column_top_z):
     upper_base_z = _add_upper_body(collection, root, mats, settings, upper_body_base_z, upper_body_width, upper_body_depth, upper_body_base_z) + 0.08
     upper_width = upper_body_width
     upper_depth = upper_body_depth
-    upper_roof_width = upper_width + overhang * 1.2
-    upper_roof_depth = upper_depth + overhang * 1.2
+    upper_roof_width = upper_width + upper_overhang * 2.0
+    upper_roof_depth = upper_depth + upper_overhang * 2.0
     upper_roof_curve = curve * 1.2
     upper_ridge_ratio = 0.58
     gable_push = (upper_roof_width - upper_width) * 0.5
@@ -1190,10 +1660,6 @@ def _add_layered_roof(collection, root, mats, settings, column_top_z):
     ridge_overlap = _setting(settings, "roof_line_width", 0.055)
     ridge_length = upper_roof_width * upper_ridge_ratio + gable_push * 2.0 + ridge_overlap
     add_box(collection, root, "BGCP_Hall_Ridge_Beam", (0.0, 0.0, ridge_z), (ridge_length, 0.12, 0.08), trim, "roof_ridge")
-
-    upper_eave_z = upper_base_z
-    _add_roof_edge_lines(collection, root, mats, settings, "BGCP_Hall_Lower_Roof", lower_outer_width, lower_outer_depth, lower_eave_z, lower_bow)
-    _add_roof_edge_lines(collection, root, mats, settings, "BGCP_Hall_Upper_Roof", upper_roof_width, upper_roof_depth, upper_eave_z, upper_bow)
 
     return upper_base_z + upper_height
 
